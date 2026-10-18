@@ -1,0 +1,29 @@
+{
+	"name": "bingo-multiplayer-app",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Bingo multijoueur en temps réel : salons, grilles aléatoires, chat et annonces (Hono + WebSocket + Vue)",
+	"license": "UNLICENSED",
+	"workspaces": [
+		"shared",
+		"server",
+		"web"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"dev": "npm run dev -w server & npm run dev -w web",
+		"build": "npm run build -w web && npm run build -w server",
+		"typecheck": "npm run typecheck --workspaces --if-present",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"test": "npm test --workspaces --if-present"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"typescript": "~5.9.3",
+		"vitest": "^5.0.5"
+	}
+}
