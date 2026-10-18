@@ -146,26 +146,26 @@ const statusText = computed(() => {
 			<AppIcon name="wifiOff" :size="18" /> {{ statusText }}
 		</div>
 
-		<header class="bar container">
-			<div class="bar__title">
-				<p class="eyebrow">{{ solo ? 'Partie solo' : `Salon ${room.code}` }}</p>
-				<h1 class="bar__name">{{ room.name }}</h1>
-				<p class="bar__meta">
-					<span><AppIcon name="book" :size="16" /> {{ room.dictionary.title }}</span>
-					<span v-if="!solo"><AppIcon name="users" :size="16" /> {{ players }}/{{ room.maxPlayers }}</span>
-					<span v-if="spectators"><AppIcon name="eye" :size="16" /> {{ spectators }}</span>
-					<span v-if="room.hasPassword"><AppIcon name="lock" :size="16" /> Privé</span>
-				</p>
-			</div>
-			<div class="bar__actions">
-				<AppButton v-if="!solo" variant="sun" icon="users" @click="shareOpen = true">Inviter</AppButton>
-				<AppButton variant="secondary" icon="logout" @click="leaveOpen = true">
-					<span class="bar__leave">Quitter</span>
-				</AppButton>
-			</div>
-		</header>
-
 		<div class="layout container">
+			<header class="bar">
+				<div class="bar__title">
+					<p class="eyebrow">{{ solo ? 'Partie solo' : `Salon ${room.code}` }}</p>
+					<h1 class="bar__name">{{ room.name }}</h1>
+					<p class="bar__meta">
+						<span><AppIcon name="book" :size="16" /> {{ room.dictionary.title }}</span>
+						<span v-if="!solo"><AppIcon name="users" :size="16" /> {{ players }}/{{ room.maxPlayers }}</span>
+						<span v-if="spectators"><AppIcon name="eye" :size="16" /> {{ spectators }}</span>
+						<span v-if="room.hasPassword"><AppIcon name="lock" :size="16" /> Privé</span>
+					</p>
+				</div>
+				<div class="bar__actions">
+					<AppButton v-if="!solo" variant="sun" icon="users" @click="shareOpen = true">Inviter</AppButton>
+					<AppButton variant="secondary" icon="logout" @click="leaveOpen = true">
+						<span class="bar__leave">Quitter</span>
+					</AppButton>
+				</div>
+			</header>
+
 			<!-- My grid -->
 			<section class="pane pane--grid" aria-labelledby="my-grid-title">
 				<template v-if="me?.cells">
@@ -321,8 +321,10 @@ const statusText = computed(() => {
 	animation: spin 0.8s linear infinite;
 }
 .live__status {
-	position: sticky;
-	top: 64px;
+	position: fixed;
+	top: 66px;
+	left: 0;
+	right: 0;
 	z-index: 30;
 	display: flex;
 	align-items: center;
@@ -335,13 +337,12 @@ const statusText = computed(() => {
 	font-weight: 700;
 }
 .bar {
+	grid-area: bar;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: flex-end;
 	justify-content: space-between;
 	gap: 14px;
-	padding-top: 22px;
-	padding-bottom: 18px;
 }
 .bar__title {
 	display: grid;
@@ -369,17 +370,29 @@ const statusText = computed(() => {
 	display: flex;
 	gap: 10px;
 }
+/*
+ * The room title sits in the left column, so the chat column starts right
+ * under the site header and, being exactly one viewport tall, shows its input
+ * without scrolling. It stays sticky while the left column scrolls.
+ */
 .layout {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+	grid-template-rows: auto auto 1fr;
 	grid-template-areas:
+		'bar chat'
 		'grid chat'
 		'players chat';
 	align-items: start;
-	gap: 24px;
+	column-gap: 24px;
+	row-gap: 20px;
+	padding-top: 20px;
 }
 .live--solo .layout {
-	grid-template-areas: 'grid chat';
+	grid-template-rows: auto 1fr;
+	grid-template-areas:
+		'bar chat'
+		'grid chat';
 }
 .pane {
 	display: grid;
@@ -395,16 +408,30 @@ const statusText = computed(() => {
 .pane--chat {
 	grid-area: chat;
 	position: sticky;
-	top: 84px;
-	height: calc(100dvh - 108px);
-	min-height: 420px;
+	/* site header (66px) + layout padding (20px) */
+	top: 86px;
+	height: calc(100dvh - 86px - 16px);
+	min-height: 360px;
 }
 .live--solo .pane--chat {
 	height: auto;
 	min-height: 0;
 }
+@media (min-width: 901px) {
+	/*
+	 * The sticky chat is held by its grid area: the page must end right under
+	 * the layout, otherwise scrolling to the bottom pushes the chat under the
+	 * site header. Cancels the bottom padding of <main> (App.vue).
+	 */
+	.live {
+		margin-bottom: -48px;
+	}
+	.layout {
+		padding-bottom: 16px;
+	}
+}
 .pane--grid > :deep(.grid) {
-	max-width: min(100%, 680px, calc(100dvh - 300px));
+	max-width: min(100%, 680px, calc(100dvh - 320px));
 	min-width: min(100%, 300px);
 	justify-self: center;
 }
@@ -492,10 +519,17 @@ const statusText = computed(() => {
 @media (max-width: 900px) {
 	.layout {
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-areas: 'grid' 'players' 'chat';
+		grid-template-rows: none;
+		grid-template-areas: 'bar' 'grid' 'players' 'chat';
+		/* Hidden tabs leave empty rows: no gap between them, spacing on the bar. */
+		row-gap: 0;
+	}
+	.bar {
+		margin-bottom: 16px;
 	}
 	.live--solo .layout {
-		grid-template-areas: 'grid' 'chat';
+		grid-template-rows: none;
+		grid-template-areas: 'bar' 'grid' 'chat';
 	}
 	.live:not(.live--solo) .pane {
 		display: none;
@@ -510,7 +544,13 @@ const statusText = computed(() => {
 	}
 	.pane--chat {
 		position: static;
-		height: calc(100dvh - 250px);
+		/* site header + layout padding + tab bar */
+		height: calc(100dvh - 180px);
+		min-height: 300px;
+	}
+	/* The chat tab gets the whole screen: the room title is on the other tabs. */
+	.live[data-tab='chat'] .bar {
+		display: none;
 	}
 	.live:not(.live--solo) {
 		padding-bottom: 76px;
