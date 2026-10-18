@@ -90,13 +90,22 @@ modifier ce fichier et redéployer.
 
 ## Déploiement
 
+L'image est construite par le `Dockerfile` à la racine, via les workflows partagés de
+[`voikyrioh/workflows`](https://github.com/Voikyrioh/workflows) :
+
+| Workflow (ce repo) | Appelle | Résultat |
+|---|---|---|
+| `ci.yml` (push, PR) | — | lint, typecheck, tests (Postgres), build, image construite sans push |
+| `deploy.yml` (manuel) | `deploy-app.yml` | image `ghcr.io/voikyrioh/bingo:<sha>` + `latest`, `.env` depuis Vault, `docker compose up` sur le serveur |
+| `release.yml` (manuel) | `ci-release.yml` | tag `vX.Y.Z`, image `ghcr.io/voikyrioh/bingo:vX.Y.Z` + `latest`, release GitHub |
+
 1. Infra (une fois) : fiche `apps/bingo.yml` du repo `infra-as-code`, `tofu apply` pour le DNS,
    puis workflow `provision-app.yml` (`app_name=bingo`) : base Postgres, secrets Vault,
    compose Traefik et secrets GitHub de ce repo. Détail : runbook `docs/runbooks/mettre-en-ligne-bingo.md`
    du repo infra.
-2. Release : workflow **Release** de ce repo (bump patch/minor/major) → image
-   `ghcr.io/voikyrioh/bingo:vX.Y.Z`.
-3. Déploiement : workflow `deploy-version.yml` du repo infra (`app_name=bingo`, `version=vX.Y.Z`).
+2. Déployer le commit courant : `gh workflow run deploy.yml --repo voikyrioh/bingo-multiplayer-app`.
+3. Ou, pour une version numérotée : workflow **Release**, puis `deploy-version.yml` du repo infra
+   (`app_name=bingo`, `version=vX.Y.Z`).
 
 Un seul conteneur sert le client, l'API (`/api`) et les WebSockets (`/api/rooms/:code/ws`) :
 même origine, donc pas de CORS. Le serveur garde l'état des connexions en mémoire : **une
