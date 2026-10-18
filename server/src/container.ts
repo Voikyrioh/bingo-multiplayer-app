@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { DictionaryService } from './application/dictionary.service'
+import { NameService } from './application/name.service'
 import type { DictionaryRepository, NameRepository, RoomRepository } from './application/ports'
 import { RoomService } from './application/room.service'
 import type { Config } from './config'
@@ -25,7 +26,7 @@ import { logger } from './logger'
 export interface Container {
 	rooms: RoomService
 	dictionaries: DictionaryService
-	names: NameRepository
+	names: NameService
 	hub: ConnectionHub
 	dispose(): Promise<void>
 }
@@ -71,5 +72,6 @@ export async function createContainer(config: Config): Promise<Container> {
 		ids: cryptoIds,
 		random: cryptoRandom,
 	})
-	return { rooms, dictionaries, names, hub, dispose }
+	const nameService = new NameService({ names, dictionaries: dictionaryRepo, rooms: roomRepo })
+	return { rooms, dictionaries, names: nameService, hub, dispose }
 }

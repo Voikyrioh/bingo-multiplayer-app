@@ -61,10 +61,14 @@ export class MemoryNameRepository implements NameRepository {
 	constructor(
 		private readonly random: Random,
 		private readonly names: string[] = FUNNY_NAMES,
+		private readonly byDictionary: Map<string, string[]> = new Map(
+			FEATURED_DICTIONARIES.map((d) => [d.id, d.funnyNames ?? []]),
+		),
 	) {}
 
-	async sample(count: number) {
-		return shuffle(this.names, this.random).slice(0, count)
+	async sample(count: number, dictionaryId?: string | null) {
+		const pool = dictionaryId ? (this.byDictionary.get(dictionaryId) ?? []) : this.names
+		return shuffle(pool, this.random).slice(0, count)
 	}
 }
 

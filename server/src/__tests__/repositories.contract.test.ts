@@ -100,10 +100,16 @@ function contract(name: string, factory: () => Promise<Repos>, options: { skip?:
 			expect((await repos.dictionaries.listListed(100)).some((d) => d.id === id)).toBe(false)
 		})
 
-		it('samples funny names', async () => {
+		it('samples funny names, general or reserved to a dictionary', async () => {
 			const names = await repos.names.sample(5)
 			expect(names).toHaveLength(5)
 			expect(new Set(names).size).toBe(5)
+			const reserved = macron.funnyNames ?? []
+			const themed = await repos.names.sample(50, macron.id)
+			expect([...themed].sort()).toEqual([...reserved].sort())
+			const general = await repos.names.sample(500)
+			expect(general.some((n) => reserved.includes(n))).toBe(false)
+			expect(await repos.names.sample(5, FEATURED_DICTIONARIES[1]?.id)).toEqual([])
 		})
 
 		it('stores rooms, participants and progress', async () => {

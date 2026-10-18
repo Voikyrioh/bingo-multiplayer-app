@@ -16,8 +16,12 @@ export interface DictionaryRepository {
 }
 
 export interface NameRepository {
-	/** Random sample of funny names (order is random). */
-	sample(count: number): Promise<string[]>
+	/**
+	 * Random sample of funny names (order is random). With a dictionary id: only
+	 * the names reserved for that dictionary (possibly none); without: the
+	 * general pool.
+	 */
+	sample(count: number, dictionaryId?: string | null): Promise<string[]>
 }
 
 export interface OpenRoomRow {

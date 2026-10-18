@@ -16,7 +16,7 @@ import {
 import { normalizeRoomCode, roomCode } from '../domain/codes'
 import { DomainError, forbidden, notFound, validation } from '../domain/errors'
 import { generateGrid, initialChecked, toggle } from '../domain/grid'
-import { cleanName, firstFreeName, isNameTaken } from '../domain/names'
+import { cleanName, isNameTaken } from '../domain/names'
 import type { Random } from '../domain/random'
 import {
 	announcementText,
@@ -28,6 +28,7 @@ import {
 	type Room,
 } from '../domain/room'
 import { cleanText } from '../domain/text'
+import { drawFunnyName } from './funny-names'
 import { KeyedMutex } from './keyed-mutex'
 import type {
 	Clock,
@@ -60,7 +61,6 @@ export interface Session {
 }
 
 const PUBLIC_LIST_LIMIT = 100
-const NAME_SAMPLE = 20
 const CHAT_WINDOW_MS = 10_000
 const CHAT_MAX_PER_WINDOW = 8
 /** Activity is written at most once per minute (a toggle is not worth a write each). */
@@ -109,7 +109,7 @@ export class RoomService {
 			)
 		}
 
-		const ownerName = cleanName(request.ownerName) ?? (await this.funnyName([]))
+		const ownerName = cleanName(request.ownerName) ?? (await this.funnyName([], dictionary.id))
 		let code = roomCode(random)
 		while (await rooms.findByCode(code)) code = roomCode(random)
 		const now = clock.now()
@@ -193,7 +193,7 @@ export class RoomService {
 			if (wanted && isNameTaken(wanted, takenNames)) {
 				throw validation('Ce pseudo est déjà pris dans ce salon.')
 			}
-			const name = wanted ?? (await this.funnyName(takenNames))
+			const name = wanted ?? (await this.funnyName(takenNames, room.dictionary.id))
 			const dictionary = await dictionaries.findById(room.dictionary.id)
 			if (!dictionary) throw notFound('Le dictionnaire de ce salon a disparu.')
 
@@ -463,9 +463,8 @@ export class RoomService {
 		return { participant, token }
 	}
 
-	private async funnyName(taken: string[]): Promise<string> {
-		const candidates = await this.deps.names.sample(NAME_SAMPLE)
-		return firstFreeName(candidates, taken)
+	private funnyName(taken: string[], dictionaryId: string): Promise<string> {
+		return drawFunnyName(this.deps.names, taken, dictionaryId)
 	}
 
 	private async findRoom(rawCode: string): Promise<Room> {

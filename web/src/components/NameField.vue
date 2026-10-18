@@ -6,14 +6,15 @@ import AppField from './ui/AppField.vue'
 import AppIcon from './ui/AppIcon.vue'
 
 // Pseudo with a dice that draws a funny name. Empty = the server draws one.
+// `room` or `dictionary` themes the names (e.g. the speech has its own list).
 const model = defineModel<string>({ default: '' })
-defineProps<{ error?: string | null }>()
+const props = defineProps<{ error?: string | null; room?: string; dictionary?: string }>()
 const rolling = ref(false)
 
 async function roll() {
 	rolling.value = true
 	try {
-		model.value = (await api.randomName()).name
+		model.value = (await api.randomName({ room: props.room, dictionary: props.dictionary })).name
 	} catch {
 		// Offline: keep the current value.
 	} finally {

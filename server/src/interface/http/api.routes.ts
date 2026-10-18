@@ -1,8 +1,7 @@
 import { Hono } from 'hono'
 import type { DictionaryService } from '../../application/dictionary.service'
-import type { NameRepository } from '../../application/ports'
+import type { NameService } from '../../application/name.service'
 import type { RoomService } from '../../application/room.service'
-import { firstFreeName } from '../../domain/names'
 import { createDictionarySchema, createRoomSchema, joinRoomSchema } from '../schemas'
 import { rateLimit } from './rate-limit'
 import { jsonBody } from './validate'
@@ -10,7 +9,7 @@ import { jsonBody } from './validate'
 export interface ApiDeps {
 	rooms: RoomService
 	dictionaries: DictionaryService
-	names: NameRepository
+	names: NameService
 }
 
 const noStore = { 'Cache-Control': 'no-store' }
@@ -41,7 +40,11 @@ export function apiRoutes({ rooms, dictionaries, names }: ApiDeps) {
 	)
 
 	api.get('/names/random', async (c) => {
-		const name = firstFreeName(await names.sample(1), [])
+		// ?room=CODE or ?dictionary=code: names reserved for that dictionary first.
+		const name = await names.random({
+			roomCode: c.req.query('room')?.slice(0, 12),
+			dictionaryCode: c.req.query('dictionary')?.slice(0, 40),
+		})
 		return c.json({ name }, 200, noStore)
 	})
 

@@ -13,7 +13,7 @@ export const LIMITS = {
 	gridSizes: [3, 4, 5] as const,
 	defaultGridSize: 5,
 	nameMin: 1,
-	nameMax: 24,
+	nameMax: 30,
 	roomNameMin: 3,
 	roomNameMax: 40,
 	passwordMin: 3,

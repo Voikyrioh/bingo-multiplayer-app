@@ -11,6 +11,8 @@ export interface SeedDictionary {
 	description: string
 	freeSpace: string | null
 	entries: string[]
+	/** Funny names reserved for rooms playing this dictionary (optional). */
+	funnyNames?: string[]
 }
 
 export const FEATURED_DICTIONARIES: SeedDictionary[] = [
@@ -20,6 +22,28 @@ export const FEATURED_DICTIONARIES: SeedDictionary[] = [
 		title: 'Discours de Macron ce soir',
 		description: 'Allocution présidentielle de 20 h : cochez les expressions dès qu’elles tombent.',
 		freeSpace: 'Regard grave à la caméra',
+		funnyNames: [
+			'ManuDu92',
+			'LeStagiaireDeLElysee',
+			'BrigitteInCognito',
+			'JournalisteBFM',
+			'TéléprompteurEnPanne',
+			'GiletJauneDuSoir',
+			'GrévisteDuBingo',
+			'MinistreDeLApaisement',
+			'CordonSanitaire.exe',
+			'ExpertEnBordélisation',
+			'CommissionDeDiscipline',
+			'LeGarantDeLOrdre',
+			'49.3InTheBox',
+			'BismillahCestLesTénèbres',
+			'BlackBlocDeSalon',
+			'BarricadeDu20h',
+			'SaucisseMerguezDu18',
+			'GazLacrymoInMyEyes',
+			'ServiceDeMaintienDeLAmbiance',
+			'PoubelleRévolutionnaire',
+		],
 		entries: [
 			'Mes chers compatriotes',
 			"J'ai entendu votre colère",
@@ -162,7 +186,7 @@ export const FEATURED_DICTIONARIES: SeedDictionary[] = [
 	},
 ]
 
-/** Funny pseudos given to players who do not choose one. */
+/** Funny pseudos given to players who do not choose one (any dictionary). */
 export const FUNNY_NAMES: string[] = [
 	'Raclette Masquée',
 	'Capitaine Croissant',

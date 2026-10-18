@@ -179,7 +179,11 @@ async function submit() {
 
 			<section class="step card" aria-labelledby="step-4">
 				<h2 id="step-4" class="step__title"><span class="step__num">{{ solo ? 3 : 4 }}</span> Vous</h2>
-				<NameField v-model="ownerName" :error="nameError" />
+				<NameField
+					v-model="ownerName"
+					:error="nameError"
+					:dictionary="dictionaryCode === 'new' ? undefined : dictionaryCode"
+				/>
 			</section>
 
 			<p v-if="error" class="create__error" role="alert">{{ error }}</p>

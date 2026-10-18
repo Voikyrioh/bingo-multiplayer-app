@@ -2,7 +2,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { Hono } from 'hono'
 import type { DictionaryService } from '../../application/dictionary.service'
-import type { NameRepository } from '../../application/ports'
+import type { NameService } from '../../application/name.service'
 import type { RoomService } from '../../application/room.service'
 import type { ConnectionHub } from '../../infrastructure/realtime/connection-hub'
 import { RoomConnection } from '../ws/room-connection'
@@ -12,7 +12,7 @@ import { errorBody, onError, onNotFound } from './errors'
 export interface AppDeps {
 	rooms: RoomService
 	dictionaries: DictionaryService
-	names: NameRepository
+	names: NameService
 	hub: ConnectionHub
 	/** Allowed Origin of WebSocket upgrades; null = any (development). */
 	publicOrigin: string | null

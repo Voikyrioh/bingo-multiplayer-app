@@ -56,7 +56,7 @@ async function submit() {
 
 <template>
 	<form class="join" @submit.prevent="submit">
-		<NameField v-model="name" :error="nameError" />
+		<NameField v-model="name" :error="nameError" :room="preview.code" />
 		<AppField
 			v-if="preview.hasPassword"
 			v-model="password"

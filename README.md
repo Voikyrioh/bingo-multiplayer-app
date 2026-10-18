@@ -12,7 +12,8 @@ Production : <https://bingo.voikyrioh.fr> (fiche infra `apps/bingo.yml` du repo 
 - Détection des lignes, colonnes, diagonales et du carton plein (serveur = seule autorité).
 - Salons jusqu'à **50 joueurs** (+ 50 spectateurs), avec ou sans mot de passe, visibles ou non
   dans la liste publique, rejoignables par lien ou par code à 6 caractères.
-- Pseudo libre ou **nom marrant** tiré d'une table en base.
+- Pseudo libre ou **nom marrant** tiré d'une table en base ; un dictionnaire peut avoir ses
+  propres noms (le discours a les siens), la liste générale sert de secours.
 - Grilles des autres visibles (lecture seule), classement en direct, **chat** à droite.
 - L'hôte choisit ou écrit le dictionnaire, peut **exclure** quelqu'un ; s'il part, le rôle passe
   au joueur suivant.
@@ -85,8 +86,9 @@ Validées au démarrage par `server/src/config.ts`. Exemple : `.env.example`.
 
 Migrations SQL dans `server/migrations/`, appliquées **au démarrage** (verrou consultatif
 Postgres, table `schema_migrations`), puis upsert des dictionnaires vedettes et des noms
-marrants depuis `server/src/infrastructure/seed-data.ts`. Ajouter un dictionnaire vedette =
-modifier ce fichier et redéployer.
+marrants depuis `server/src/infrastructure/seed-data.ts` (champ `funnyNames` d'un dictionnaire
+pour ses noms réservés). Ajouter ou modifier un dictionnaire vedette ou ses noms = modifier ce
+fichier et redéployer.
 
 ## Déploiement
 

@@ -22,9 +22,23 @@ export async function seed(pool: pg.Pool): Promise<void> {
 			)
 		}
 		await client.query(
-			`INSERT INTO funny_names (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`,
+			`INSERT INTO funny_names (name) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING`,
 			[FUNNY_NAMES],
 		)
+		// Names reserved for a featured dictionary: the list of seed-data.ts is
+		// the reference, a name removed from it disappears at the next boot.
+		for (const d of FEATURED_DICTIONARIES) {
+			const names = d.funnyNames ?? []
+			await client.query(
+				'DELETE FROM funny_names WHERE dictionary_id = $1 AND NOT (name = ANY($2::text[]))',
+				[d.id, names],
+			)
+			await client.query(
+				`INSERT INTO funny_names (name, dictionary_id) SELECT unnest($2::text[]), $1
+				 ON CONFLICT DO NOTHING`,
+				[d.id, names],
+			)
+		}
 		await client.query('COMMIT')
 	} catch (error) {
 		await client.query('ROLLBACK')

@@ -87,10 +87,11 @@ export class PgDictionaryRepository implements DictionaryRepository {
 export class PgNameRepository implements NameRepository {
 	constructor(private readonly pool: pg.Pool) {}
 
-	async sample(count: number) {
+	async sample(count: number, dictionaryId?: string | null) {
 		const { rows } = await this.pool.query<{ name: string }>(
-			'SELECT name FROM funny_names ORDER BY random() LIMIT $1',
-			[count],
+			`SELECT name FROM funny_names WHERE dictionary_id IS NOT DISTINCT FROM $2
+			 ORDER BY random() LIMIT $1`,
+			[count, dictionaryId ?? null],
 		)
 		return rows.map((r) => r.name)
 	}

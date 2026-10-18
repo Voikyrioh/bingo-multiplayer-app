@@ -1,5 +1,6 @@
 import type { Membership, RoomSummary } from '@bingo/shared'
 import { describe, expect, it } from 'vitest'
+import { FEATURED_DICTIONARIES, FUNNY_NAMES } from '../infrastructure/seed-data'
 import { createApp } from '../interface/http/app'
 import { baseRoom, createTestServices, MACRON } from './support/fixtures'
 
@@ -80,10 +81,16 @@ describe('HTTP API', () => {
 		expect((await app.request('/api/nothing')).status).toBe(404)
 	})
 
-	it('gives a random funny name', async () => {
-		const { app } = testApp()
-		const { name } = (await (await app.request('/api/names/random')).json()) as { name: string }
-		expect(name.length).toBeGreaterThan(2)
+	it('gives a random funny name, themed by the dictionary or the room', async () => {
+		const { app, post } = testApp()
+		const random = async (query = '') =>
+			((await (await app.request(`/api/names/random${query}`)).json()) as { name: string }).name
+		const themed = FEATURED_DICTIONARIES[0]?.funnyNames ?? []
+		expect(FUNNY_NAMES).toContain(await random())
+		expect(themed).toContain(await random(`?dictionary=${MACRON}`))
+		expect(FUNNY_NAMES).toContain(await random('?dictionary=reunion-d-equipe'))
+		const owner = (await (await post('/api/rooms', baseRoom)).json()) as Membership
+		expect(themed).toContain(await random(`?room=${owner.roomCode.toLowerCase()}`))
 	})
 
 	it('rate limits the writes', async () => {

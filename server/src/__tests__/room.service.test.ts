@@ -1,7 +1,10 @@
 import { CLOSE_CODES, LIMITS } from '@bingo/shared'
 import { describe, expect, it } from 'vitest'
 import type { Session } from '../application/room.service'
+import { FEATURED_DICTIONARIES, FUNNY_NAMES } from '../infrastructure/seed-data'
 import { baseRoom, createTestServices, FakeSocket } from './support/fixtures'
+
+const MACRON_NAMES = FEATURED_DICTIONARIES[0]?.funnyNames ?? []
 
 async function setup() {
 	const services = createTestServices()
@@ -274,5 +277,38 @@ describe('RoomService.sweep', () => {
 		clock.advance(8 * 24 * 60 * 60 * 1000)
 		expect((await rooms.sweep()).purged).toBe(1)
 		await expect(rooms.preview(owner.roomCode)).rejects.toMatchObject({ code: 'not-found' })
+	})
+})
+
+describe('funny names', () => {
+	it('gives the names reserved for the speech dictionary in its rooms', async () => {
+		const { rooms } = createTestServices()
+		const owner = await rooms.create({ ...baseRoom, ownerName: null })
+		expect(MACRON_NAMES).toContain(owner.name)
+		const guest = await rooms.join(owner.roomCode, { role: 'player' })
+		expect(MACRON_NAMES).toContain(guest.name)
+		expect(guest.name).not.toBe(owner.name)
+	})
+
+	it('uses the general pool for the other dictionaries', async () => {
+		const { rooms } = createTestServices()
+		const owner = await rooms.create({
+			...baseRoom,
+			dictionaryCode: 'reunion-d-equipe',
+			ownerName: null,
+		})
+		expect(FUNNY_NAMES).toContain(owner.name)
+	})
+
+	it('falls back to the general pool once every reserved name is taken', async () => {
+		const { rooms } = createTestServices()
+		const owner = await rooms.create({ ...baseRoom, ownerName: null })
+		const names = [owner.name]
+		for (let i = 1; i < MACRON_NAMES.length + 3; i++) {
+			names.push((await rooms.join(owner.roomCode, { role: 'player' })).name)
+		}
+		expect(new Set(names).size).toBe(names.length)
+		expect(names.filter((n) => MACRON_NAMES.includes(n))).toHaveLength(MACRON_NAMES.length)
+		expect(names.filter((n) => FUNNY_NAMES.includes(n))).toHaveLength(3)
 	})
 })

@@ -1,4 +1,5 @@
 import { DictionaryService } from '../../application/dictionary.service'
+import { NameService } from '../../application/name.service'
 import type { Clock, IdGenerator } from '../../application/ports'
 import { RoomService } from '../../application/room.service'
 import type { Random } from '../../domain/random'
@@ -80,7 +81,18 @@ export function createTestServices() {
 		random,
 	})
 	const dictionaries = new DictionaryService({ dictionaries: dictionaryRepo, clock, ids, random })
-	return { clock, random, roomRepo, dictionaryRepo, names, hub, rooms, dictionaries }
+	const nameService = new NameService({ names, dictionaries: dictionaryRepo, rooms: roomRepo })
+	return {
+		clock,
+		random,
+		roomRepo,
+		dictionaryRepo,
+		nameRepo: names,
+		names: nameService,
+		hub,
+		rooms,
+		dictionaries,
+	}
 }
 
 export const MACRON = 'discours-macron'

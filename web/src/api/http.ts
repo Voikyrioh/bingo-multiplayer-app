@@ -55,5 +55,12 @@ export const api = {
 	createRoom: (body: CreateRoomRequest) => post<Membership>('/rooms', body),
 	joinRoom: (code: string, body: JoinRoomRequest) =>
 		post<Membership>(`/rooms/${encodeURIComponent(code)}/join`, body),
-	randomName: () => request<{ name: string }>('/names/random'),
+	/** Funny name, themed by the room's dictionary or by a dictionary code when given. */
+	randomName: (context: { room?: string; dictionary?: string } = {}) => {
+		const query = new URLSearchParams()
+		if (context.room) query.set('room', context.room)
+		if (context.dictionary) query.set('dictionary', context.dictionary)
+		const search = query.toString()
+		return request<{ name: string }>(`/names/random${search ? `?${search}` : ''}`)
+	},
 }
