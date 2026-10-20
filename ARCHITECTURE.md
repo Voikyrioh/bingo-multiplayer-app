@@ -27,7 +27,8 @@ server/src/
   interface/       entrées : http/ (routes Hono, erreurs, rate limit), ws/room-connection.ts,
                    schemas.ts (Zod)
   container.ts     racine de composition : le seul endroit qui choisit les adaptateurs
-  index.ts         démarrage, balayage périodique des salons, arrêt propre
+  instrumentation.ts  OpenTelemetry (@Voikyrioh/observability), premier import
+  index.ts         démarrage, balayage périodique des salons, arrêt propre (flush des spans)
 ```
 
 Sens des dépendances : `interface → application → domain`, `infrastructure → application`.

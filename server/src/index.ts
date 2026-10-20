@@ -1,13 +1,16 @@
+// MUST be the first import: OpenTelemetry patches modules before the app imports them.
+// (A side-effect import also stops the import sorter from moving it.)
+import './instrumentation'
+import { Logger } from '@Voikyrioh/observability'
 import { serve } from '@hono/node-server'
 import { loadConfig } from './config'
 import { createContainer } from './container'
+import { observability } from './instrumentation'
 import { createApp } from './interface/http/app'
-import { logger, setLogLevel } from './logger'
 
 const SWEEP_INTERVAL_MS = 60_000
 
 const config = loadConfig()
-setLogLevel(config.logLevel)
 const container = await createContainer(config)
 const { app, injectWebSocket } = createApp({
 	...container,
@@ -16,10 +19,14 @@ const { app, injectWebSocket } = createApp({
 })
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) =>
-	logger.info(`Bingo listening on http://${info.address}:${info.port}`, {
-		storage: config.storage.kind,
-		static: config.staticDir ?? 'none',
-	}),
+	Logger.info(
+		{
+			storage: config.storage.kind,
+			static: config.staticDir ?? 'none',
+			tracing: observability.enabled,
+		},
+		`Bingo listening on http://${info.address}:${info.port}`,
+	),
 )
 injectWebSocket(server)
 
@@ -28,9 +35,9 @@ const sweeper = setInterval(() => {
 	container.rooms
 		.sweep()
 		.then((result) => {
-			if (result.closed || result.purged) logger.info('Rooms swept', result)
+			if (result.closed || result.purged) Logger.info(result, 'Rooms swept')
 		})
-		.catch((error) => logger.error('Sweep failed', { error: (error as Error).message }))
+		.catch((error) => Logger.error({ err: error }, 'Sweep failed'))
 }, SWEEP_INTERVAL_MS)
 
 function stop() {
@@ -38,7 +45,9 @@ function stop() {
 	container.hub.closeAll()
 	server.close(async () => {
 		await container.dispose()
-		logger.info('Server stopped')
+		Logger.info('Server stopped')
+		// Pending spans are flushed to SigNoz before exiting.
+		await observability.shutdown().catch(() => undefined)
 		process.exit(0)
 	})
 }

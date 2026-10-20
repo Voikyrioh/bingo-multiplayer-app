@@ -1,8 +1,8 @@
+import { Logger } from '@Voikyrioh/observability'
 import type { ApiError, TextParams } from '@bingo/shared'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { DomainError, type DomainErrorCode } from '../../domain/errors'
-import { logger } from '../../logger'
 
 const STATUS: Record<DomainErrorCode, ContentfulStatusCode> = {
 	validation: 400,
@@ -25,7 +25,8 @@ export function onError(error: Error, c: Context) {
 	if (error instanceof DomainError) {
 		return c.json(errorBody(error.code, error.key, error.params), STATUS[error.code])
 	}
-	logger.error('Unhandled error', { path: c.req.path, error: error.message, stack: error.stack })
+	// Inside the request span (otelHono): the log line carries its traceId.
+	Logger.error({ err: error, path: c.req.path }, 'Unhandled error')
 	return c.json(errorBody('internal', 'internal'), 500)
 }
 

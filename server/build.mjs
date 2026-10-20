@@ -9,7 +9,15 @@ await esbuild.build({
 	outfile: 'dist/index.js',
 	// npm dependencies stay external (reinstalled with --omit=dev in the image);
 	// the workspace package @bingo/shared (TypeScript sources) is bundled.
-	external: ['@hono/node-server', '@hono/node-ws', 'hono', 'pg', 'zod'],
+	external: [
+		'@hono/node-server',
+		'@hono/node-ws',
+		'@opentelemetry/api',
+		'@Voikyrioh/observability',
+		'hono',
+		'pg',
+		'zod',
+	],
 	sourcemap: true,
 })
 

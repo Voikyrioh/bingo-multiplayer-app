@@ -1,3 +1,4 @@
+import { otelHono } from '@Voikyrioh/observability'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { Hono } from 'hono'
@@ -28,6 +29,9 @@ export function createApp(deps: AppDeps) {
 	const app = new Hono()
 	const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
+	// First middleware: one server span per request (SigNoz), with the route
+	// pattern as name (GET /api/rooms/:code). Logs written meanwhile carry its traceId.
+	app.use(otelHono())
 	app.onError(onError)
 	app.notFound((c) =>
 		c.req.path.startsWith('/api/') ? onNotFound(c) : c.text('Page introuvable', 404),
