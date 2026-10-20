@@ -1,48 +1,50 @@
 <script setup lang="ts">
 import type { DictionaryView } from '@bingo/shared'
 import { onMounted, ref } from 'vue'
-import { ApiRequestError, api } from '../api/http'
+import { api } from '../api/http'
 import ShareBox from '../components/ShareBox.vue'
 import AppButton from '../components/ui/AppButton.vue'
+import { useI18n } from '../i18n/useI18n'
+import { usePageTitle } from '../i18n/usePageTitle'
 import { dictionaryLink } from '../lib/format'
 
 const props = defineProps<{ code: string }>()
+const { t, tc, errorText, languageName } = useI18n()
 const dictionary = ref<DictionaryView | null>(null)
-const error = ref<string | null>(null)
+const error = ref<unknown>(null)
+usePageTitle(() => dictionary.value?.title ?? t('dictPage.tabTitle'))
 
 onMounted(async () => {
 	try {
 		dictionary.value = await api.getDictionary(props.code)
-		document.title = `${dictionary.value.title} · Bingo Live`
 	} catch (e) {
-		error.value =
-			e instanceof ApiRequestError && e.status === 404
-				? 'Ce dictionnaire n’existe pas.'
-				: (e as Error).message
+		error.value = e
 	}
 })
 </script>
 
 <template>
 	<div class="container dict">
-		<p v-if="error" class="dict__error">{{ error }}</p>
-		<p v-else-if="!dictionary" class="muted" aria-busy="true">Chargement…</p>
+		<p v-if="error" class="dict__error">{{ errorText(error) }}</p>
+		<p v-else-if="!dictionary" class="muted" aria-busy="true">{{ t('common.loading') }}</p>
 		<template v-else>
 			<header class="dict__head">
-				<p class="eyebrow">Dictionnaire · {{ dictionary.entryCount }} expressions</p>
-				<h1>{{ dictionary.title }}</h1>
-				<p v-if="dictionary.description" class="dict__desc">{{ dictionary.description }}</p>
+				<p class="eyebrow">
+					{{ t('dictPage.eyebrow', { entries: tc('dict.entries', dictionary.entryCount), language: languageName(dictionary.language) }) }}
+				</p>
+				<h1 :lang="dictionary.language">{{ dictionary.title }}</h1>
+				<p v-if="dictionary.description" class="dict__desc" :lang="dictionary.language">{{ dictionary.description }}</p>
 				<div class="dict__actions">
-					<AppButton :to="`/creer?d=${dictionary.code}`" size="lg" icon="users">Créer un salon avec</AppButton>
-					<AppButton :to="`/solo?d=${dictionary.code}`" size="lg" variant="secondary" icon="play">Jouer en solo</AppButton>
+					<AppButton :to="`/creer?d=${dictionary.code}`" size="lg" icon="users">{{ t('dictPage.createRoom') }}</AppButton>
+					<AppButton :to="`/solo?d=${dictionary.code}`" size="lg" variant="secondary" icon="play">{{ t('home.solo') }}</AppButton>
 				</div>
 				<div class="dict__share">
-					<ShareBox :link="dictionaryLink(dictionary.code)" label="Partager ce dictionnaire" :title="dictionary.title" />
+					<ShareBox :link="dictionaryLink(dictionary.code)" :label="t('room.shareDictionary')" :title="dictionary.title" />
 				</div>
 			</header>
 			<section aria-labelledby="entries-title">
-				<h2 id="entries-title" class="visually-hidden">Les expressions</h2>
-				<ul class="entries">
+				<h2 id="entries-title" class="visually-hidden">{{ t('dictPage.entries') }}</h2>
+				<ul class="entries" :lang="dictionary.language">
 					<li v-for="(entry, i) in dictionary.entries" :key="entry" class="entry" :style="{ '--r': `${((i * 37) % 7) - 3}deg` }">
 						{{ entry }}
 					</li>

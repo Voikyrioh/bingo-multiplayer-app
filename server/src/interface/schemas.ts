@@ -9,6 +9,8 @@ import { z } from 'zod'
 const shortText = (max: number) => z.string().max(max * 2)
 
 export const createDictionarySchema = z.object({
+	// Checked against the supported languages by the domain (dictionaryLanguageInvalid).
+	language: z.string().max(10),
 	title: shortText(LIMITS.dictionaryTitleMax),
 	description: shortText(LIMITS.dictionaryDescriptionMax).optional(),
 	entries: z.array(shortText(LIMITS.entryMax)).max(LIMITS.dictionaryEntriesMax * 2),

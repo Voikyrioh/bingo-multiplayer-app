@@ -15,6 +15,7 @@ import { type Message, maxPlayers, type Participant, type Room } from '../domain
 export function dictionarySummary(d: Dictionary): DictionarySummary {
 	return {
 		code: d.code,
+		language: d.language,
 		title: d.title,
 		description: d.description,
 		entryCount: d.entries.length,
@@ -41,7 +42,11 @@ export function roomView(room: Room): RoomView {
 		gridSize: room.gridSize,
 		freeCenter: room.freeCenter,
 		ownerId: room.ownerId,
-		dictionary: { code: room.dictionary.code, title: room.dictionary.title },
+		dictionary: {
+			code: room.dictionary.code,
+			title: room.dictionary.title,
+			language: room.dictionary.language,
+		},
 		createdAt: room.createdAt.toISOString(),
 		maxPlayers: maxPlayers(room),
 	}
@@ -52,6 +57,7 @@ export function roomSummary(room: Room, players: number, spectators: number): Ro
 		code: room.code,
 		name: room.name,
 		dictionaryTitle: room.dictionary.title,
+		language: room.dictionary.language,
 		gridSize: room.gridSize,
 		hasPassword: room.passwordHash !== null,
 		players,
@@ -88,6 +94,7 @@ export function messageView(m: Message): MessageView {
 		authorId: m.authorId,
 		authorName: m.authorName,
 		text: m.text,
+		...(m.key ? { key: m.key, params: m.params ?? {} } : {}),
 		createdAt: m.createdAt.toISOString(),
 		...(m.announcement ? { announcement: m.announcement } : {}),
 	}

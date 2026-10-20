@@ -68,4 +68,11 @@ Accessibilité : grille au clavier (tabindex mobile, flèches), `aria-pressed` s
 annonces en région `aria-live`, chat en `role="log"`, modales `<dialog>` natives, contrastes AA,
 `prefers-reduced-motion` respecté (pas de confettis ni d'animations), thème sombre automatique.
 
+Traductions : `@Voikyrioh/vue-translate` charge `/locales/<locale>` (fichiers de
+`web/public/locales/`, servis en JSON par le serveur) ; `i18n/useI18n.ts` y ajoute les
+pluriels (`Intl.PluralRules`), la traduction des erreurs et le changement de langue. Rien
+n'est affiché avant le chargement du fichier de la langue (pas de clés brutes à l'écran).
+Le serveur ne formule aucune phrase : `ApiError` et les messages du fil portent une clé et des
+paramètres (`shared/src/protocol.ts`).
+
 Règles métier : `docs/business-rules.md`.

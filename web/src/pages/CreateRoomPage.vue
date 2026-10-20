@@ -17,17 +17,22 @@ import AppButton from '../components/ui/AppButton.vue'
 import AppField from '../components/ui/AppField.vue'
 import AppSegmented from '../components/ui/AppSegmented.vue'
 import AppToggle from '../components/ui/AppToggle.vue'
-import { draftProblem, emptyDraft, parseEntries } from '../lib/dictionary-draft'
+import { useI18n } from '../i18n/useI18n'
+import { usePageTitle } from '../i18n/usePageTitle'
+import { type DraftProblem, draftProblem, emptyDraft, parseEntries } from '../lib/dictionary-draft'
 import { lastName, rememberName, saveMembership } from '../lib/identity'
 
 const props = defineProps<{ mode: RoomMode }>()
 const route = useRoute()
 const router = useRouter()
 const solo = computed(() => props.mode === 'solo')
+const { t, tc, errorText, language } = useI18n()
+usePageTitle(() => (solo.value ? t('create.soloTitle') : t('rooms.create')))
 
 const dictionaryCode = ref(typeof route.query.d === 'string' ? route.query.d : 'discours-macron')
 const extraDictionary = ref<DictionarySummary | null>(null)
-const draft = ref(emptyDraft())
+// A new dictionary is in the interface language unless the author says otherwise.
+const draft = ref(emptyDraft(language.value.code))
 const gridSize = ref<GridSize>(LIMITS.defaultGridSize)
 const freeCenter = ref(true)
 const roomName = ref('')
@@ -36,16 +41,24 @@ const listed = ref(true)
 const ownerName = ref(lastName())
 
 const submitting = ref(false)
-const error = ref<string | null>(null)
-const draftError = ref<string | null>(null)
-const nameError = ref<string | null>(null)
+// Kept as received, translated when shown (the language may change meanwhile).
+const error = ref<unknown>(null)
+const draftError = ref<DraftProblem | null>(null)
+const draftErrorText = computed(() => {
+	const problem = draftError.value
+	if (!problem) return null
+	const key = `draft.${problem.key}`
+	return problem.count === undefined
+		? t(key, problem.params)
+		: tc(key, problem.count, problem.params)
+})
 
 const needed = computed(() => entriesNeeded(gridSize.value, freeCenter.value))
-const sizes = [
-	{ value: 3 as const, label: '3×3', hint: 'Express' },
-	{ value: 4 as const, label: '4×4', hint: 'Classique' },
-	{ value: 5 as const, label: '5×5', hint: 'Marathon' },
-]
+const sizes = computed(() => [
+	{ value: 3 as const, label: '3×3', hint: t('create.size3') },
+	{ value: 4 as const, label: '4×4', hint: t('create.size4') },
+	{ value: 5 as const, label: '5×5', hint: t('create.size5') },
+])
 
 // A dictionary shared by link (/d/<code> → "Jouer avec") may be unlisted.
 onMounted(async () => {
@@ -73,7 +86,7 @@ const dictionaryTitle = computed(() =>
 )
 
 async function submit() {
-	error.value = draftError.value = nameError.value = null
+	error.value = draftError.value = null
 	let code = dictionaryCode.value
 	if (code === 'new') {
 		const problem = draftProblem(draft.value, needed.value)
@@ -84,16 +97,23 @@ async function submit() {
 		}
 	}
 	const name = solo.value
-		? `Solo · ${dictionaryTitle.value || 'Bingo'}`.slice(0, LIMITS.roomNameMax)
+		? t('create.soloRoomName', { title: dictionaryTitle.value || 'Bingo' }).slice(
+				0,
+				LIMITS.roomNameMax,
+			)
 		: roomName.value.trim()
 	if (!solo.value && name.length < LIMITS.roomNameMin) {
-		error.value = 'Donnez un nom à votre salon (3 caractères minimum).'
+		error.value = new ApiRequestError(0, 'validation', 'roomNameLength', {
+			min: LIMITS.roomNameMin,
+			max: LIMITS.roomNameMax,
+		})
 		return
 	}
 	submitting.value = true
 	try {
 		if (code === 'new') {
 			const created = await api.createDictionary({
+				language: draft.value.language,
 				title: draft.value.title,
 				description: draft.value.description,
 				entries: parseEntries(draft.value.entriesText),
@@ -118,8 +138,7 @@ async function submit() {
 		saveMembership(membership)
 		await router.push({ path: `/r/${membership.roomCode}`, query: { nouveau: '1' } })
 	} catch (e) {
-		const err = e as ApiRequestError
-		error.value = err instanceof ApiRequestError ? err.message : 'Oups, une erreur inattendue.'
+		error.value = e
 	} finally {
 		submitting.value = false
 	}
@@ -129,67 +148,60 @@ async function submit() {
 <template>
 	<div class="container create">
 		<header class="create__head">
-			<p class="eyebrow">{{ solo ? 'Partie solo' : 'Nouveau salon' }}</p>
-			<h1>{{ solo ? 'Jouer en solo' : 'Créer un salon' }}</h1>
-			<p class="muted">
-				{{
-					solo
-						? 'Une grille rien que pour vous. Si vous écrivez votre dictionnaire, vous pourrez partager son lien.'
-						: 'Trois choix et c’est parti : vous recevez un lien à envoyer à vos amis.'
-				}}
-			</p>
+			<p class="eyebrow">{{ solo ? t('room.solo') : t('create.eyebrow') }}</p>
+			<h1>{{ solo ? t('create.soloTitle') : t('rooms.create') }}</h1>
+			<p class="muted">{{ solo ? t('create.soloLead') : t('create.lead') }}</p>
 		</header>
 
 		<form class="create__form" novalidate @submit.prevent="submit">
 			<section id="step-dictionary" class="step card" aria-labelledby="step-1">
-				<h2 id="step-1" class="step__title"><span class="step__num">1</span> Le dictionnaire</h2>
+				<h2 id="step-1" class="step__title"><span class="step__num">1</span> {{ t('create.stepDictionary') }}</h2>
 				<DictionaryPicker v-model="dictionaryCode" v-model:title="pickedTitle" :needed="needed" :extra="extraDictionary" />
 				<Transition name="unfold">
 					<div v-if="dictionaryCode === 'new'" class="step__editor">
-						<DictionaryEditor v-model="draft" :needed="needed" :error="draftError" />
+						<DictionaryEditor v-model="draft" :needed="needed" :error="draftErrorText" />
 					</div>
 				</Transition>
 			</section>
 
 			<section class="step card" aria-labelledby="step-2">
-				<h2 id="step-2" class="step__title"><span class="step__num">2</span> La grille</h2>
-				<AppSegmented v-model="gridSize" label="Taille" :options="sizes" />
+				<h2 id="step-2" class="step__title"><span class="step__num">2</span> {{ t('create.stepGrid') }}</h2>
+				<AppSegmented v-model="gridSize" :label="t('create.size')" :options="sizes" />
 				<AppToggle
 					v-model="freeCenter"
-					label="Case gratuite au centre"
-					:hint="hasCenter(gridSize) ? 'Elle est cochée d’office.' : 'Seulement pour les grilles 3×3 et 5×5.'"
+					:label="t('create.freeCenter')"
+					:hint="hasCenter(gridSize) ? t('create.freeCenterHint') : t('create.freeCenterOdd')"
 					:disabled="!hasCenter(gridSize)"
 				/>
-				<p class="muted">Chaque joueur reçoit une grille différente tirée du même dictionnaire ({{ needed }} expressions par grille).</p>
+				<p class="muted">{{ tc('create.gridHint', needed) }}</p>
 			</section>
 
 			<section v-if="!solo" class="step card" aria-labelledby="step-3">
-				<h2 id="step-3" class="step__title"><span class="step__num">3</span> Le salon</h2>
-				<AppField v-model="roomName" label="Nom du salon" :maxlength="LIMITS.roomNameMax" placeholder="Ex. : Allocution du 20 h" required />
+				<h2 id="step-3" class="step__title"><span class="step__num">3</span> {{ t('create.stepRoom') }}</h2>
+				<AppField v-model="roomName" :label="t('create.roomName')" :maxlength="LIMITS.roomNameMax" :placeholder="t('create.roomNamePlaceholder')" required />
 				<AppField
 					v-model="password"
 					type="password"
-					label="Mot de passe (facultatif)"
+					:label="t('create.password')"
 					:maxlength="LIMITS.passwordMax"
-					hint="Demandé aux joueurs comme aux spectateurs."
+					:hint="t('create.passwordHint')"
 					autocomplete="new-password"
 				/>
-				<AppToggle v-model="listed" label="Afficher dans la liste des salons" hint="Sinon, seules les personnes qui ont le lien pourront entrer." />
+				<AppToggle v-model="listed" :label="t('create.listed')" :hint="t('create.listedHint')" />
 			</section>
 
 			<section class="step card" aria-labelledby="step-4">
-				<h2 id="step-4" class="step__title"><span class="step__num">{{ solo ? 3 : 4 }}</span> Vous</h2>
+				<h2 id="step-4" class="step__title"><span class="step__num">{{ solo ? 3 : 4 }}</span> {{ t('create.stepYou') }}</h2>
 				<NameField
 					v-model="ownerName"
-					:error="nameError"
 					:dictionary="dictionaryCode === 'new' ? undefined : dictionaryCode"
 				/>
 			</section>
 
-			<p v-if="error" class="create__error" role="alert">{{ error }}</p>
+			<p v-if="error" class="create__error" role="alert">{{ errorText(error) }}</p>
 			<div class="create__submit">
 				<AppButton type="submit" size="lg" :loading="submitting" icon-right="arrowRight">
-					{{ solo ? 'Lancer ma partie' : 'Créer le salon' }}
+					{{ solo ? t('create.submitSolo') : t('create.submit') }}
 				</AppButton>
 			</div>
 		</form>

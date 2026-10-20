@@ -1,3 +1,4 @@
+import { isLanguageCode, type LanguageCode } from '@bingo/shared'
 import { Hono } from 'hono'
 import type { DictionaryService } from '../../application/dictionary.service'
 import type { NameService } from '../../application/name.service'
@@ -20,7 +21,10 @@ export function apiRoutes({ rooms, dictionaries, names }: ApiDeps) {
 
 	api.get('/health', (c) => c.json({ status: 'ok' }, 200, noStore))
 
-	api.get('/dictionaries', async (c) => c.json(await dictionaries.listListed(), 200, noStore))
+	// ?language=xx: only content in that language (absent or unknown = every language).
+	api.get('/dictionaries', async (c) =>
+		c.json(await dictionaries.listListed(languageQuery(c.req.query('language'))), 200, noStore),
+	)
 	api.get('/dictionaries/:code', async (c) =>
 		c.json(await dictionaries.get(c.req.param('code')), 200, noStore),
 	)
@@ -28,7 +32,9 @@ export function apiRoutes({ rooms, dictionaries, names }: ApiDeps) {
 		c.json(await dictionaries.create(c.req.valid('json')), 201, noStore),
 	)
 
-	api.get('/rooms', async (c) => c.json(await rooms.listPublic(), 200, noStore))
+	api.get('/rooms', async (c) =>
+		c.json(await rooms.listPublic(languageQuery(c.req.query('language'))), 200, noStore),
+	)
 	api.get('/rooms/:code', async (c) =>
 		c.json(await rooms.preview(c.req.param('code')), 200, noStore),
 	)
@@ -49,4 +55,8 @@ export function apiRoutes({ rooms, dictionaries, names }: ApiDeps) {
 	})
 
 	return api
+}
+
+function languageQuery(value: string | undefined): LanguageCode | undefined {
+	return isLanguageCode(value) ? value : undefined
 }

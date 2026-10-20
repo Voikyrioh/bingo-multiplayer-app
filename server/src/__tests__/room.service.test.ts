@@ -31,7 +31,8 @@ describe('RoomService.create', () => {
 		expect(snapshot.room.ownerId).toBe(owner.participantId)
 		expect(snapshot.participants[0]?.cells).toHaveLength(25)
 		expect(snapshot.participants[0]?.checked).toEqual([12])
-		expect(snapshot.messages[0]?.text).toContain('Alice a créé le salon')
+		expect(snapshot.messages[0]).toMatchObject({ key: 'roomCreated', params: { name: 'Alice' } })
+		expect(snapshot.room.dictionary.language).toBe('fr')
 	})
 
 	it('draws a funny name when none is given', async () => {
@@ -43,16 +44,18 @@ describe('RoomService.create', () => {
 	it('refuses an unknown dictionary or a dictionary too small for the grid', async () => {
 		const { rooms, dictionaries } = createTestServices()
 		await expect(rooms.create({ ...baseRoom, dictionaryCode: 'nope' })).rejects.toThrow(
-			/n’existe pas/,
+			'dictionaryNotFound',
 		)
 		const small = await dictionaries.create({
+			language: 'fr',
 			title: 'Petit',
 			entries: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'],
 			isPublic: false,
 		})
-		await expect(rooms.create({ ...baseRoom, dictionaryCode: small.code })).rejects.toThrow(
-			/il en faut 24/,
-		)
+		await expect(rooms.create({ ...baseRoom, dictionaryCode: small.code })).rejects.toMatchObject({
+			key: 'dictionaryTooSmall',
+			params: { count: 9, needed: 24, size: 5 },
+		})
 		await expect(
 			rooms.create({ ...baseRoom, dictionaryCode: small.code, gridSize: 3, freeCenter: false }),
 		).resolves.toBeDefined()
@@ -91,7 +94,12 @@ describe('RoomService.join', () => {
 		const socket = connect(services, services.ownerSession)
 		await services.rooms.join(services.owner.roomCode, { name: 'Bob', role: 'player' })
 		expect(socket.ofType('participant:joined')[0].participant.name).toBe('Bob')
-		expect(socket.ofType('message').at(-1).message.text).toContain('Bob rejoint')
+		expect(socket.ofType('message').at(-1).message).toMatchObject({
+			kind: 'system',
+			text: '',
+			key: 'playerJoined',
+			params: { name: 'Bob' },
+		})
 	})
 
 	it('accepts lower case codes', async () => {
@@ -104,7 +112,7 @@ describe('RoomService.join', () => {
 	it('refuses a taken name, case and accent insensitive', async () => {
 		const { rooms, owner } = await setup()
 		await expect(rooms.join(owner.roomCode, { name: 'alice', role: 'player' })).rejects.toThrow(
-			/déjà pris/,
+			'nameTaken',
 		)
 	})
 
@@ -168,6 +176,8 @@ describe('RoomService.toggle', () => {
 		expect(socket.ofType('message').at(-1).message).toMatchObject({
 			kind: 'announce',
 			announcement: 'full',
+			key: 'announce.full',
+			params: { name: 'Alice', lineCount: 12, rank: 1 },
 		})
 	})
 

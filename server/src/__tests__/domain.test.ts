@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { validateDictionary } from '../domain/dictionary'
 import { DomainError } from '../domain/errors'
-import { centerOf, DEFAULT_FREE_SPACE, generateGrid, initialChecked, toggle } from '../domain/grid'
+import { centerOf, generateGrid, initialChecked, toggle } from '../domain/grid'
 import { cleanName, firstFreeName } from '../domain/names'
 import { shuffle } from '../domain/random'
-import { announcementText, evaluateProgress } from '../domain/room'
+import { announcementFeed, evaluateProgress } from '../domain/room'
 import { seededRandom } from './support/fixtures'
 
 const entries = Array.from({ length: 30 }, (_, i) => `Expression ${i + 1}`)
@@ -17,7 +17,8 @@ describe('generateGrid', () => {
 			seededRandom(),
 		)
 		expect(cells).toHaveLength(25)
-		expect(cells[centerOf(5)]).toEqual({ text: DEFAULT_FREE_SPACE, free: true })
+		// Empty label: the client shows its translated "free cell".
+		expect(cells[centerOf(5)]).toEqual({ text: '', free: true })
 		const texts = cells.filter((c) => !c.free).map((c) => c.text)
 		expect(new Set(texts).size).toBe(24)
 		expect(texts.every((t) => entries.includes(t))).toBe(true)
@@ -77,7 +78,7 @@ describe('toggle', () => {
 	})
 
 	it('refuses a cell outside the grid', () => {
-		expect(() => toggle(cells, [], 9)).toThrow(/n’existe pas/)
+		expect(() => toggle(cells, [], 9)).toThrow('cellNotFound')
 	})
 })
 
@@ -110,14 +111,20 @@ describe('evaluateProgress', () => {
 		expect(again.announcement?.kind).toBe('diagonal')
 	})
 
-	it('writes announcement texts', () => {
-		expect(announcementText('Bob', 'full', 12, 1)).toContain('1er carton plein')
-		expect(announcementText('Bob', 'line', 2)).toContain('2 lignes')
+	it('describes announcements as translation keys, never as text', () => {
+		expect(announcementFeed('Bob', 'full', 12, 1)).toEqual({
+			key: 'announce.full',
+			params: { name: 'Bob', lineCount: 12, rank: 1 },
+		})
+		expect(announcementFeed('Bob', 'line', 2)).toEqual({
+			key: 'announce.line',
+			params: { name: 'Bob', lineCount: 2 },
+		})
 	})
 })
 
 describe('validateDictionary', () => {
-	const draft = { title: '  Mon  bingo ', entries, isPublic: true }
+	const draft = { language: 'fr', title: '  Mon  bingo ', entries, isPublic: true }
 
 	it('cleans the title and drops empty or duplicate entries', () => {
 		const valid = validateDictionary({
@@ -127,10 +134,20 @@ describe('validateDictionary', () => {
 		expect(valid.title).toBe('Mon bingo')
 		expect(valid.entries).toHaveLength(30)
 		expect(valid.freeSpace).toBeNull()
+		expect(valid.language).toBe('fr')
+	})
+
+	it('requires a supported language', () => {
+		expect(() => validateDictionary({ ...draft, language: 'xx' })).toThrow(
+			'dictionaryLanguageInvalid',
+		)
+		expect(validateDictionary({ ...draft, language: 'de' }).language).toBe('de')
 	})
 
 	it('requires enough entries', () => {
-		expect(() => validateDictionary({ ...draft, entries: ['a', 'b'] })).toThrow(/au moins 8/)
+		expect(() => validateDictionary({ ...draft, entries: ['a', 'b'] })).toThrow(
+			'dictionaryTooFewEntries',
+		)
 	})
 
 	it('refuses a too long entry', () => {

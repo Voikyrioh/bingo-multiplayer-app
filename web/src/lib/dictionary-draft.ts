@@ -1,7 +1,9 @@
-import { LIMITS } from '@bingo/shared'
+import { type LanguageCode, LIMITS, type TextParams } from '@bingo/shared'
 
 /** What the dictionary editor holds: entries as one text, one per line. */
 export interface DictionaryDraft {
+	/** Language the expressions are written in (never translated). */
+	language: LanguageCode
 	title: string
 	description: string
 	entriesText: string
@@ -9,8 +11,15 @@ export interface DictionaryDraft {
 	isPublic: boolean
 }
 
-export function emptyDraft(): DictionaryDraft {
-	return { title: '', description: '', entriesText: '', freeSpace: '', isPublic: false }
+export function emptyDraft(language: LanguageCode): DictionaryDraft {
+	return { language, title: '', description: '', entriesText: '', freeSpace: '', isPublic: false }
+}
+
+/** A problem to translate: `draft.<key>`, plural form chosen with `count` when given. */
+export interface DraftProblem {
+	key: string
+	params: TextParams
+	count?: number
 }
 
 const key = (s: string) =>
@@ -33,17 +42,23 @@ export function parseEntries(text: string): string[] {
 }
 
 /** First problem of the draft, or null when the server should accept it. */
-export function draftProblem(draft: DictionaryDraft, needed: number): string | null {
+export function draftProblem(draft: DictionaryDraft, needed: number): DraftProblem | null {
 	const title = draft.title.trim()
-	if (title.length < LIMITS.dictionaryTitleMin) return 'Donnez un titre à votre dictionnaire.'
+	if (title.length < LIMITS.dictionaryTitleMin) return { key: 'titleMissing', params: {} }
 	const entries = parseEntries(draft.entriesText)
 	const tooLong = entries.find((e) => e.length > LIMITS.entryMax)
-	if (tooLong) return `« ${tooLong.slice(0, 24)}… » dépasse ${LIMITS.entryMax} caractères.`
+	if (tooLong) {
+		return {
+			key: 'entryTooLong',
+			params: { entry: `${tooLong.slice(0, 24)}…`, max: LIMITS.entryMax },
+		}
+	}
 	const min = Math.max(needed, LIMITS.dictionaryEntriesMin)
-	if (entries.length < min)
-		return `Encore ${min - entries.length} expression(s) pour remplir la grille.`
+	if (entries.length < min) {
+		return { key: 'missingEntries', params: {}, count: min - entries.length }
+	}
 	if (entries.length > LIMITS.dictionaryEntriesMax) {
-		return `${LIMITS.dictionaryEntriesMax} expressions au maximum.`
+		return { key: 'tooManyEntries', params: { max: LIMITS.dictionaryEntriesMax } }
 	}
 	return null
 }

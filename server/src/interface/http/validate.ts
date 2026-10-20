@@ -9,7 +9,7 @@ export function jsonBody<T extends z.ZodType>(schema: T) {
 		if (!parsed.success) {
 			const first = parsed.error.issues[0]
 			const where = first?.path.join('.') || 'body'
-			return c.json(errorBody('validation', `Champ invalide : ${where}.`), 400)
+			return c.json(errorBody('validation', 'invalidField', { field: where }), 400)
 		}
 		return parsed.data as z.output<T>
 	})

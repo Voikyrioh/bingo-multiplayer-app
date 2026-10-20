@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { cellsInLines, type GridCellView, linesOf } from '@bingo/shared'
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from '../i18n/useI18n'
 
 const props = withDefaults(
 	defineProps<{
@@ -10,6 +11,8 @@ const props = withDefaults(
 		completedLines: string[]
 		/** Only the owner of the grid can click it. */
 		interactive?: boolean
+		/** Language of the dictionary: the expressions are read with the right voice. */
+		contentLang?: string
 		label: string
 	}>(),
 	{ interactive: false },
@@ -47,11 +50,25 @@ watch(
 	},
 )
 
+const { t } = useI18n()
+
+/** A free cell without label in its dictionary shows the translated default. */
+function cellText(cell: GridCellView): string {
+	return cell.free && !cell.text ? t('grid.freeSpace') : cell.text
+}
+
 function cellLabel(cell: GridCellView, index: number): string {
-	const row = Math.floor(index / props.size) + 1
-	const col = (index % props.size) + 1
-	const state = cell.free ? 'case gratuite' : checkedSet.value.has(index) ? 'cochée' : 'non cochée'
-	return `Ligne ${row}, colonne ${col} : ${cell.text}, ${state}`
+	const state = cell.free
+		? t('grid.stateFree')
+		: checkedSet.value.has(index)
+			? t('grid.stateChecked')
+			: t('grid.stateUnchecked')
+	return t('grid.cellLabel', {
+		row: Math.floor(index / props.size) + 1,
+		col: (index % props.size) + 1,
+		text: cellText(cell),
+		state,
+	})
 }
 
 function move(event: KeyboardEvent, index: number) {
@@ -107,7 +124,7 @@ defineExpose({ cellElement: (index: number) => buttons.value[index] ?? null })
 				@click="onClick(index)"
 				@keydown="move($event, index)"
 			>
-				<span class="cell__text">{{ cell.text }}</span>
+				<span class="cell__text" :lang="cell.free && !cell.text ? undefined : contentLang">{{ cellText(cell) }}</span>
 				<span v-if="checkedSet.has(index) && !cell.free" class="cell__stamp" aria-hidden="true" />
 				<span v-if="cell.free" class="cell__star" aria-hidden="true">★</span>
 			</button>
@@ -122,7 +139,7 @@ defineExpose({ cellElement: (index: number) => buttons.value[index] ?? null })
 				:aria-label="cellLabel(cell, index)"
 				role="img"
 			>
-				<span class="cell__text" aria-hidden="true">{{ cell.text }}</span>
+				<span class="cell__text" aria-hidden="true">{{ cellText(cell) }}</span>
 				<span v-if="checkedSet.has(index) && !cell.free" class="cell__stamp" aria-hidden="true" />
 				<span v-if="cell.free" class="cell__star" aria-hidden="true">★</span>
 			</div>

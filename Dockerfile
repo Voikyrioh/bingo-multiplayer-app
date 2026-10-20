@@ -1,14 +1,19 @@
 # One image: the Vue client (static files) served by the Hono server, which also
 # carries the API and the WebSockets. Migrations are inside the image and run
 # at boot (infra rule BR-DEPLOY-004).
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /build
 
-COPY package.json package-lock.json tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json .npmrc ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY web/package.json web/
 ENV NPM_CONFIG_LOGLEVEL=warn
+# @Voikyrioh/* (GitHub Packages, private) needs a read:packages token at npm ci.
+# GITHUB_TOKEN = build-arg passed by voikyrioh/workflows (repo secret NPM_TOKEN,
+# or the workflow token once the package grants this repository read access).
+# .npmrc only references ${GITHUB_TOKEN}; this stage is not part of the final image.
+ARG GITHUB_TOKEN
 RUN npm ci
 
 COPY shared shared
@@ -16,7 +21,7 @@ COPY server server
 COPY web web
 RUN npm run build -w web && npm run build -w server
 
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 LABEL org.opencontainers.image.source=https://github.com/voikyrioh/bingo-multiplayer-app
@@ -32,6 +37,7 @@ ENV NODE_ENV=production \
 	MIGRATIONS_DIR=/app/migrations
 
 # Production dependencies of the server workspace only (the bundle keeps them external).
+# No private package here: no .npmrc, no token in the runtime image.
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/

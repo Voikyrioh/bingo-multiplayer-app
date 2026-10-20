@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, useId, watch } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
 import AppIcon from './AppIcon.vue'
 
 // Native <dialog>: focus trapping, Esc and the backdrop come from the browser.
 const open = defineModel<boolean>('open', { default: false })
 withDefaults(defineProps<{ title: string; wide?: boolean }>(), { wide: false })
+const { t } = useI18n()
 const dialog = ref<HTMLDialogElement | null>(null)
 const titleId = useId()
 
@@ -42,7 +44,7 @@ onBeforeUnmount(() => dialog.value?.close?.())
 			<header class="modal__header">
 				<h2 :id="titleId" class="modal__title">{{ title }}</h2>
 				<button type="button" class="modal__close" @click="open = false">
-					<AppIcon name="x" label="Fermer" />
+					<AppIcon name="x" :label="t('common.close')" />
 				</button>
 			</header>
 			<div class="modal__body"><slot /></div>

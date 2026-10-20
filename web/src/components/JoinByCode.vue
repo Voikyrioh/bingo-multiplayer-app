@@ -1,27 +1,26 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from '../i18n/useI18n'
 import AppIcon from './ui/AppIcon.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const code = ref('')
-const error = ref('')
+const invalid = ref(false)
 
 function submit() {
 	// Accepts a code or a full link (https://…/r/ABC123).
 	const value = code.value.trim().split('/').pop()?.toUpperCase() ?? ''
-	if (!/^[A-Z0-9]{6}$/.test(value)) {
-		error.value = 'Un code fait 6 caractères, par exemple K7PQ2M.'
-		return
-	}
-	error.value = ''
+	invalid.value = !/^[A-Z0-9]{6}$/.test(value)
+	if (invalid.value) return
 	void router.push(`/r/${value}`)
 }
 </script>
 
 <template>
 	<form class="code" @submit.prevent="submit">
-		<label for="room-code" class="code__label">Vous avez un code ?</label>
+		<label for="room-code" class="code__label">{{ t('joinCode.label') }}</label>
 		<div class="code__row">
 			<input
 				id="room-code"
@@ -31,14 +30,14 @@ function submit() {
 				autocomplete="off"
 				autocapitalize="characters"
 				spellcheck="false"
-				:aria-invalid="error ? 'true' : undefined"
+				:aria-invalid="invalid ? 'true' : undefined"
 				aria-describedby="room-code-error"
 			/>
 			<button type="submit" class="code__go">
-				<AppIcon name="arrowRight" label="Rejoindre" />
+				<AppIcon name="arrowRight" :label="t('joinCode.submit')" />
 			</button>
 		</div>
-		<p id="room-code-error" class="code__error" role="alert">{{ error }}</p>
+		<p id="room-code-error" class="code__error" role="alert">{{ invalid ? t('joinCode.invalid', { example: 'K7PQ2M' }) : '' }}</p>
 	</form>
 </template>
 

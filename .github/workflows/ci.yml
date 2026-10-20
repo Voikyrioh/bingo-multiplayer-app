@@ -8,8 +8,13 @@ on:
   pull_request:
     branches: [main]
 
+# The workflow token reads the private @Voikyrioh packages once this repository
+# is granted access in each package's settings (Manage Actions access). The repo
+# secret NPM_TOKEN (PAT read:packages), if set, wins. Same convention as the
+# other apps (hearth-releases-api).
 permissions:
   contents: read
+  packages: read
 
 jobs:
   test:
@@ -33,10 +38,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - run: npm ci
+        env:
+          # .npmrc reads GITHUB_TOKEN to reach @Voikyrioh/* on GitHub Packages.
+          GITHUB_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Lint (biome)
         run: npm run lint
@@ -64,3 +72,5 @@ jobs:
           context: .
           push: false
           tags: bingo:ci
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}

@@ -1,6 +1,7 @@
 import type { Announcement, Membership, ServerMessage } from '@bingo/shared'
 import { computed, onScopeDispose, reactive, ref, shallowRef } from 'vue'
 import { RoomSocket, type SocketStatus } from '../api/room-socket'
+import { useI18n } from '../i18n/useI18n'
 import { applyServerMessage, emptyRoomState, ranking, toggleLocally } from '../lib/room-state'
 import { sounds } from '../lib/sound'
 import { useCelebration } from './useCelebration'
@@ -20,6 +21,7 @@ export function useRoom(membership: Membership, factory?: (url: string) => WebSo
 	const endedWith = ref<number | null>(null)
 	const announcement = shallowRef<LiveAnnouncement | null>(null)
 	const { show } = useToasts()
+	const { t } = useI18n()
 	const celebration = useCelebration()
 
 	const queue: LiveAnnouncement[] = []
@@ -71,7 +73,7 @@ export function useRoom(membership: Membership, factory?: (url: string) => WebSo
 				}
 				break
 			case 'error':
-				show(message.message, 'error')
+				show(t(`error.${message.key}`, message.params), 'error')
 				// Drop optimistic changes: ask for the real state.
 				socket.send({ type: 'sync' })
 				break
@@ -113,7 +115,7 @@ export function useRoom(membership: Membership, factory?: (url: string) => WebSo
 	function toggle(cell: number) {
 		const before = me.value?.checked.includes(cell)
 		if (!socket.send({ type: 'toggle', cell })) {
-			show('Connexion perdue : reconnexion en cours…', 'error')
+			show(t('room.offlineAction'), 'error')
 			return
 		}
 		if (toggleLocally(state, cell)) {

@@ -7,7 +7,7 @@ export function cleanName(raw: string | null | undefined): string | null {
 	const name = cleanText(raw ?? '')
 	if (!name) return null
 	if (name.length > LIMITS.nameMax) {
-		throw validation(`Le pseudo doit faire au plus ${LIMITS.nameMax} caractères.`)
+		throw validation('nameTooLong', { max: LIMITS.nameMax })
 	}
 	return name
 }

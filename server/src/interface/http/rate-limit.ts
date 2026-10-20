@@ -22,7 +22,7 @@ export function rateLimit(options: { windowMs: number; max: number; now?: () => 
 			hits.set(key, { count: 1, resetAt: time + options.windowMs })
 		} else if (++hit.count > options.max) {
 			c.header('Retry-After', String(Math.ceil((hit.resetAt - time) / 1000)))
-			return c.json(errorBody('rate-limited', 'Trop de requêtes, réessayez dans un instant.'), 429)
+			return c.json(errorBody('rate-limited', 'tooManyRequests'), 429)
 		}
 		await next()
 	}

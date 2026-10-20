@@ -62,17 +62,17 @@ export class RoomConnection {
 	private async handle(data: string): Promise<void> {
 		if (this.closed) return
 		if (data.length > MAX_MESSAGE_BYTES) {
-			return this.send({ type: 'error', code: 'validation', message: 'Message trop long.' })
+			return this.send({ type: 'error', code: 'validation', key: 'messageTooLong' })
 		}
 		let json: unknown
 		try {
 			json = JSON.parse(data)
 		} catch {
-			return this.send({ type: 'error', code: 'validation', message: 'Message illisible.' })
+			return this.send({ type: 'error', code: 'validation', key: 'messageUnreadable' })
 		}
 		const parsed = clientMessageSchema.safeParse(json)
 		if (!parsed.success) {
-			return this.send({ type: 'error', code: 'validation', message: 'Message invalide.' })
+			return this.send({ type: 'error', code: 'validation', key: 'messageInvalid' })
 		}
 		const message = parsed.data
 		const { rooms, hub } = this.deps
@@ -115,13 +115,13 @@ export class RoomConnection {
 
 	private fail(error: unknown): void {
 		if (error instanceof DomainError) {
-			this.send({ type: 'error', code: error.code, message: error.message })
+			this.send({ type: 'error', code: error.code, key: error.key, params: error.params })
 			if (error.code === 'unauthorized') this.socket.close(CLOSE_CODES.unauthorized)
 			if (error.code === 'room-closed') this.socket.close(CLOSE_CODES.roomClosed)
 			return
 		}
 		logger.error('WebSocket message failed', { error: (error as Error)?.message })
-		this.send({ type: 'error', code: 'internal', message: 'Oups, une erreur inattendue.' })
+		this.send({ type: 'error', code: 'internal', key: 'internal' })
 	}
 
 	private send(message: ServerMessage): void {

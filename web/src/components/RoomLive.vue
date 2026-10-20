@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCelebration } from '../composables/useCelebration'
 import { useRoom } from '../composables/useRoom'
+import { useI18n } from '../i18n/useI18n'
 import { dictionaryLink, roomLink } from '../lib/format'
 import { forgetMembership } from '../lib/identity'
 import { sounds } from '../lib/sound'
@@ -21,6 +22,7 @@ const emit = defineEmits<{ forget: []; reconnect: [] }>()
 const route = useRoute()
 const router = useRouter()
 const celebration = useCelebration()
+const { t, tc } = useI18n()
 
 const { state, status, endedWith, announcement, me, isOwner, ranked, toggle, chat, kick, leave } =
 	useRoom(props.membership)
@@ -104,8 +106,8 @@ function confirmLeave() {
 }
 
 const statusText = computed(() => {
-	if (status.value === 'reconnecting') return 'Connexion perdue, on se reconnecte…'
-	if (status.value === 'connecting') return 'Connexion…'
+	if (status.value === 'reconnecting') return t('room.reconnecting')
+	if (status.value === 'connecting') return t('room.connecting')
 	return ''
 })
 </script>
@@ -114,28 +116,28 @@ const statusText = computed(() => {
 	<!-- Final screens -->
 	<div v-if="state.kicked || endedWith === CLOSE_CODES.kicked" class="container ended">
 		<p class="ended__emoji" aria-hidden="true">🚪</p>
-		<h1>Vous avez été exclu du salon</h1>
-		<p class="muted">L’hôte vous a retiré de la partie.</p>
-		<AppButton to="/salons" icon="globe">Voir les autres salons</AppButton>
+		<h1>{{ t('room.kickedTitle') }}</h1>
+		<p class="muted">{{ t('room.kickedText') }}</p>
+		<AppButton to="/salons" icon="globe">{{ t('room.otherRooms') }}</AppButton>
 	</div>
 	<div v-else-if="state.closed || endedWith === CLOSE_CODES.roomClosed" class="container ended">
 		<p class="ended__emoji" aria-hidden="true">🌙</p>
-		<h1>Le salon est fermé</h1>
+		<h1>{{ t('room.closedTitle') }}</h1>
 		<p class="muted">
-			{{ state.closed === 'inactive' ? 'Aucune activité depuis 2 jours.' : 'Plus personne n’était connecté.' }}
+			{{ state.closed === 'inactive' ? t('room.closedInactive') : t('room.closedEmpty') }}
 		</p>
-		<AppButton to="/creer" icon="plus">Créer un nouveau salon</AppButton>
+		<AppButton to="/creer" icon="plus">{{ t('room.createNew') }}</AppButton>
 	</div>
 	<div v-else-if="endedWith === CLOSE_CODES.replaced" class="container ended">
 		<p class="ended__emoji" aria-hidden="true">🪟</p>
-		<h1>Partie ouverte dans un autre onglet</h1>
-		<p class="muted">Vous ne pouvez jouer que dans un onglet à la fois.</p>
-		<AppButton icon="refresh" @click="emit('reconnect')">Jouer ici</AppButton>
+		<h1>{{ t('room.replacedTitle') }}</h1>
+		<p class="muted">{{ t('room.replacedText') }}</p>
+		<AppButton icon="refresh" @click="emit('reconnect')">{{ t('room.playHere') }}</AppButton>
 	</div>
 
 	<div v-else-if="!state.ready" class="container ended" aria-busy="true">
 		<span class="spinner" aria-hidden="true" />
-		<p>{{ statusText || 'Connexion…' }}</p>
+		<p>{{ statusText || t('room.connecting') }}</p>
 	</div>
 
 	<!-- Live room -->
@@ -149,19 +151,27 @@ const statusText = computed(() => {
 		<div class="layout container">
 			<header class="bar">
 				<div class="bar__title">
-					<p class="eyebrow">{{ solo ? 'Partie solo' : `Salon ${room.code}` }}</p>
+					<p class="eyebrow">{{ solo ? t('room.solo') : t('room.eyebrow', { code: room.code }) }}</p>
 					<h1 class="bar__name">{{ room.name }}</h1>
 					<p class="bar__meta">
-						<span><AppIcon name="book" :size="16" /> {{ room.dictionary.title }}</span>
-						<span v-if="!solo"><AppIcon name="users" :size="16" /> {{ players }}/{{ room.maxPlayers }}</span>
-						<span v-if="spectators"><AppIcon name="eye" :size="16" /> {{ spectators }}</span>
-						<span v-if="room.hasPassword"><AppIcon name="lock" :size="16" /> Privé</span>
+						<span :lang="room.dictionary.language"><AppIcon name="book" :size="16" /> {{ room.dictionary.title }}</span>
+						<span v-if="!solo" :title="tc('rooms.players', players, { max: room.maxPlayers })">
+							<AppIcon name="users" :size="16" />
+							<span aria-hidden="true">{{ players }}/{{ room.maxPlayers }}</span>
+							<span class="visually-hidden">{{ tc('rooms.players', players, { max: room.maxPlayers }) }}</span>
+						</span>
+						<span v-if="spectators" :title="tc('rooms.spectators', spectators)">
+							<AppIcon name="eye" :size="16" />
+							<span aria-hidden="true">{{ spectators }}</span>
+							<span class="visually-hidden">{{ tc('rooms.spectators', spectators) }}</span>
+						</span>
+						<span v-if="room.hasPassword"><AppIcon name="lock" :size="16" /> {{ t('room.private') }}</span>
 					</p>
 				</div>
 				<div class="bar__actions">
-					<AppButton v-if="!solo" variant="sun" icon="users" @click="shareOpen = true">Inviter</AppButton>
+					<AppButton v-if="!solo" variant="sun" icon="users" @click="shareOpen = true">{{ t('room.invite') }}</AppButton>
 					<AppButton variant="secondary" icon="logout" @click="leaveOpen = true">
-						<span class="bar__leave">Quitter</span>
+						<span class="bar__leave">{{ t('room.leave') }}</span>
 					</AppButton>
 				</div>
 			</header>
@@ -170,13 +180,13 @@ const statusText = computed(() => {
 			<section class="pane pane--grid" aria-labelledby="my-grid-title">
 				<template v-if="me?.cells">
 					<div class="pane__head">
-						<h2 id="my-grid-title">Ma grille</h2>
+						<h2 id="my-grid-title">{{ t('room.myGrid') }}</h2>
 						<p class="progress" aria-live="polite">
-							<span class="progress__chip">{{ me.checked.length }}/{{ totalCells }} cases</span>
+							<span class="progress__chip">{{ t('player.cells', { count: me.checked.length, total: totalCells }) }}</span>
 							<span class="progress__chip progress__chip--lines">
-								{{ me.completedLines.length }} ligne{{ me.completedLines.length > 1 ? 's' : '' }}
+								{{ tc('player.lines', me.completedLines.length) }}
 							</span>
-							<span v-if="meFull" class="progress__chip progress__chip--full">Carton plein !</span>
+							<span v-if="meFull" class="progress__chip progress__chip--full">{{ t('player.full') }}</span>
 						</p>
 					</div>
 					<BingoGrid
@@ -186,24 +196,25 @@ const statusText = computed(() => {
 						:checked="me.checked"
 						:completed-lines="me.completedLines"
 						interactive
-						:label="`Ma grille de bingo, ${me.checked.length} cases cochées sur ${totalCells}`"
+						:content-lang="room.dictionary.language"
+						:label="t('room.myGridLabel', { count: me.checked.length, total: totalCells })"
 						@toggle="toggle"
 						@line-completed="onLineCompleted"
 					/>
-					<p class="pane__hint muted">Touchez une case quand l’expression tombe. Touchez-la à nouveau pour la décocher.</p>
+					<p class="pane__hint muted">{{ t('room.gridHint') }}</p>
 				</template>
 				<div v-else class="spectator card">
 					<p class="spectator__emoji" aria-hidden="true">👀</p>
-					<h2 id="my-grid-title">Vous êtes spectateur</h2>
-					<p class="muted">Suivez les grilles des joueurs et réagissez dans le fil du salon.</p>
+					<h2 id="my-grid-title">{{ t('room.spectatorTitle') }}</h2>
+					<p class="muted">{{ t('room.spectatorText') }}</p>
 				</div>
 			</section>
 
 			<!-- Players -->
 			<section v-if="!solo" class="pane pane--players" aria-labelledby="players-title">
 				<div class="pane__head">
-					<h2 id="players-title">Classement</h2>
-					<span class="muted">{{ state.participants.length }} présent{{ state.participants.length > 1 ? 's' : '' }}</span>
+					<h2 id="players-title">{{ t('room.ranking') }}</h2>
+					<span class="muted">{{ tc('room.present', state.participants.length) }}</span>
 				</div>
 				<ol class="players">
 					<PlayerCard
@@ -218,81 +229,85 @@ const statusText = computed(() => {
 						@kick="kickTarget = p"
 					/>
 				</ol>
-				<p v-if="others.length === 0" class="muted">Personne d’autre pour l’instant : partagez le lien !</p>
+				<p v-if="others.length === 0" class="muted">{{ t('room.alone') }}</p>
 			</section>
 
 			<!-- Chat, or share box in solo -->
-			<aside class="pane pane--chat" :aria-label="solo ? 'Partager' : 'Discussion'">
+			<aside class="pane pane--chat" :aria-label="solo ? t('share.share') : t('room.discussion')">
 				<ChatPanel v-if="!solo" :messages="state.messages" :me="state.me" :can-write="true" @send="chat" />
 				<div v-else class="solo card">
-					<h2>Partagez ce dictionnaire</h2>
-					<p class="muted">Vos amis pourront créer un salon ou jouer en solo avec les mêmes expressions.</p>
-					<ShareBox :link="dictionaryLink(room.dictionary.code)" label="Lien du dictionnaire" :title="room.dictionary.title" />
+					<h2>{{ t('room.shareDictionary') }}</h2>
+					<p class="muted">{{ t('room.shareDictionaryText') }}</p>
+					<ShareBox :link="dictionaryLink(room.dictionary.code)" :label="t('room.dictionaryLink')" :title="room.dictionary.title" />
 					<AppButton :to="`/creer?d=${room.dictionary.code}`" variant="secondary" icon="users">
-						En faire un salon multijoueur
+						{{ t('room.makeMultiplayer') }}
 					</AppButton>
 				</div>
 			</aside>
 		</div>
 
 		<!-- Mobile tab bar -->
-		<nav v-if="!solo" class="tabs" aria-label="Sections du salon">
+		<nav v-if="!solo" class="tabs" :aria-label="t('room.tabs')">
 			<button type="button" class="tabs__btn" :aria-current="tab === 'grid' ? 'page' : undefined" @click="tab = 'grid'">
-				<AppIcon name="grid" /> <span>Grille</span>
+				<AppIcon name="grid" /> <span>{{ t('room.tabGrid') }}</span>
 			</button>
 			<button type="button" class="tabs__btn" :aria-current="tab === 'players' ? 'page' : undefined" @click="tab = 'players'">
-				<AppIcon name="trophy" /> <span>Joueurs</span>
+				<AppIcon name="trophy" /> <span>{{ t('room.tabPlayers') }}</span>
 			</button>
 			<button type="button" class="tabs__btn" :aria-current="tab === 'chat' ? 'page' : undefined" @click="tab = 'chat'">
-				<AppIcon name="chat" /> <span>Chat</span>
-				<span v-if="unread" class="tabs__badge" :aria-label="`${unread} non lus`">{{ unread > 99 ? '99+' : unread }}</span>
+				<AppIcon name="chat" /> <span>{{ t('room.tabChat') }}</span>
+				<span v-if="unread" class="tabs__badge" :aria-label="tc('room.unread', unread)">{{ unread > 99 ? '99+' : unread }}</span>
 			</button>
 		</nav>
 
 		<!-- Invite -->
-		<AppModal v-model:open="shareOpen" title="Invitez vos amis">
+		<AppModal v-model:open="shareOpen" :title="t('room.inviteTitle')">
 			<div class="invite">
-				<ShareBox :link="link" label="Lien du salon" :title="room.name" />
+				<ShareBox :link="link" :label="t('room.roomLink')" :title="room.name" />
 				<p class="invite__code">
-					Ou donnez le code <strong>{{ room.code }}</strong>
-					<template v-if="room.hasPassword"> et le mot de passe</template>.
+					<span>{{ room.hasPassword ? t('room.orCodeAndPassword') : t('room.orCode') }}</span>
+					<strong>{{ room.code }}</strong>
 				</p>
-				<ShareBox :link="dictionaryLink(room.dictionary.code)" label="Lien du dictionnaire" :title="room.dictionary.title" />
+				<ShareBox :link="dictionaryLink(room.dictionary.code)" :label="t('room.dictionaryLink')" :title="room.dictionary.title" />
 			</div>
 		</AppModal>
 
 		<!-- Somebody else's grid (read only) -->
-		<AppModal v-model:open="viewingOpen" :title="viewed ? `Grille de ${viewed.name}` : 'Grille'" wide>
+		<AppModal v-model:open="viewingOpen" :title="viewed ? t('room.gridOf', { name: viewed.name }) : t('room.tabGrid')" wide>
 			<div v-if="viewed?.cells" class="viewer">
 				<BingoGrid
 					:size="room.gridSize"
 					:cells="viewed.cells"
 					:checked="viewed.checked"
 					:completed-lines="viewed.completedLines"
-					:label="`Grille de ${viewed.name}`"
+					:content-lang="room.dictionary.language"
+					:label="t('room.gridOf', { name: viewed.name })"
 				/>
-				<p class="muted">{{ viewed.checked.length }}/{{ totalCells }} cases · {{ viewed.completedLines.length }} ligne(s). La grille se met à jour en direct.</p>
+				<p class="muted">
+					{{ t('player.summary', { cells: t('player.cells', { count: viewed.checked.length, total: totalCells }), lines: tc('player.lines', viewed.completedLines.length) }) }}
+					· {{ t('room.liveGrid') }}
+				</p>
 			</div>
-			<p v-else class="muted">Cette personne a quitté le salon.</p>
+			<p v-else class="muted">{{ t('room.personLeft') }}</p>
 		</AppModal>
 
 		<!-- Confirmations -->
-		<AppModal v-model:open="kickOpen" title="Exclure du salon ?">
-			<p>{{ kickTarget?.name }} sera retiré de la partie et perdra sa grille.</p>
+		<AppModal v-model:open="kickOpen" :title="t('room.kickTitle')">
+			<p>{{ t('room.kickText', { name: kickTarget?.name ?? '' }) }}</p>
 			<template #footer>
-				<AppButton variant="secondary" @click="kickTarget = null">Annuler</AppButton>
-				<AppButton variant="danger" icon="userX" @click="confirmKick">Exclure</AppButton>
+				<AppButton variant="secondary" @click="kickTarget = null">{{ t('common.cancel') }}</AppButton>
+				<AppButton variant="danger" icon="userX" @click="confirmKick">{{ t('room.kickConfirm') }}</AppButton>
 			</template>
 		</AppModal>
-		<AppModal v-model:open="leaveOpen" title="Quitter le salon ?">
+		<AppModal v-model:open="leaveOpen" :title="t('room.leaveTitle')">
 			<p>
-				Votre grille sera perdue.
-				<template v-if="isOwner && !solo"> Le rôle d’hôte passera au joueur suivant.</template>
-				Pour revenir plus tard sans rien perdre, fermez simplement l’onglet.
+				{{ t('room.leaveLost') }}
+				<template v-if="isOwner && !solo">{{ t('room.leaveHost') }}</template>
+				{{ t('room.leaveTip') }}
 			</p>
 			<template #footer>
-				<AppButton variant="secondary" @click="leaveOpen = false">Rester</AppButton>
-				<AppButton variant="danger" icon="logout" @click="confirmLeave">Quitter</AppButton>
+				<AppButton variant="secondary" @click="leaveOpen = false">{{ t('room.stay') }}</AppButton>
+				<AppButton variant="danger" icon="logout" @click="confirmLeave">{{ t('room.leave') }}</AppButton>
 			</template>
 		</AppModal>
 	</div>
@@ -495,6 +510,12 @@ const statusText = computed(() => {
 .invite {
 	display: grid;
 	gap: 16px;
+}
+.invite__code {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
 }
 .invite__code strong {
 	padding: 2px 10px;

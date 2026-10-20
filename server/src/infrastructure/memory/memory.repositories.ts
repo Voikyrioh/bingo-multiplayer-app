@@ -1,3 +1,4 @@
+import type { LanguageCode } from '@bingo/shared'
 import type {
 	DictionaryRepository,
 	NameRepository,
@@ -21,7 +22,7 @@ export class MemoryDictionaryRepository implements DictionaryRepository {
 
 	constructor(seed = true) {
 		if (!seed) return
-		for (const d of FEATURED_DICTIONARIES) {
+		for (const { funnyNames: _names, ...d } of FEATURED_DICTIONARIES) {
 			this.byId.set(d.id, {
 				...d,
 				isPublic: true,
@@ -45,9 +46,9 @@ export class MemoryDictionaryRepository implements DictionaryRepository {
 		return found ? clone(found) : null
 	}
 
-	async listListed(limit: number) {
+	async listListed(limit: number, language?: LanguageCode) {
 		return [...this.byId.values()]
-			.filter((d) => d.isPublic || d.featured)
+			.filter((d) => (d.isPublic || d.featured) && (!language || d.language === language))
 			.sort(
 				(a, b) =>
 					Number(b.featured) - Number(a.featured) || b.createdAt.getTime() - a.createdAt.getTime(),
@@ -105,10 +106,11 @@ export class MemoryRoomRepository implements RoomRepository {
 		})
 	}
 
-	async listOpenPublic(limit: number): Promise<OpenRoomRow[]> {
+	async listOpenPublic(limit: number, language?: LanguageCode): Promise<OpenRoomRow[]> {
 		const rows = []
 		for (const room of this.rooms.values()) {
 			if (room.closedAt || room.visibility !== 'public' || room.mode !== 'multi') continue
+			if (language && room.dictionary.language !== language) continue
 			rows.push({ room: clone(room), ...(await this.countParticipants(room.id)) })
 		}
 		return rows

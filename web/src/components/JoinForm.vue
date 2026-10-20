@@ -2,6 +2,7 @@
 import type { Membership, ParticipantRole, RoomPreview } from '@bingo/shared'
 import { computed, ref } from 'vue'
 import { ApiRequestError, api } from '../api/http'
+import { useI18n } from '../i18n/useI18n'
 import { lastName, rememberName } from '../lib/identity'
 import NameField from './NameField.vue'
 import AppButton from './ui/AppButton.vue'
@@ -11,23 +12,25 @@ import AppSegmented from './ui/AppSegmented.vue'
 const props = defineProps<{ preview: RoomPreview }>()
 const emit = defineEmits<{ joined: [membership: Membership] }>()
 
+const { t, errorText } = useI18n()
 const name = ref(lastName())
 const password = ref('')
 const playersFull = computed(() => props.preview.players >= props.preview.maxPlayers)
 const role = ref<ParticipantRole>(playersFull.value ? 'spectator' : 'player')
 const submitting = ref(false)
-const error = ref<string | null>(null)
-const passwordError = ref<string | null>(null)
-const nameError = ref<string | null>(null)
+// Errors are kept as received and translated when shown (language switch).
+const error = ref<unknown>(null)
+const passwordError = ref<unknown>(null)
+const nameError = ref<unknown>(null)
 
 const roles = computed(() => [
 	{
 		value: 'player' as const,
-		label: '🎲 Jouer',
-		hint: playersFull.value ? 'Complet' : 'Ma propre grille',
+		label: t('join.play'),
+		hint: playersFull.value ? t('join.full') : t('join.playHint'),
 		disabled: playersFull.value,
 	},
-	{ value: 'spectator' as const, label: '👀 Regarder', hint: 'Spectateur' },
+	{ value: 'spectator' as const, label: t('join.watch'), hint: t('join.watchHint') },
 ])
 
 async function submit() {
@@ -42,12 +45,9 @@ async function submit() {
 		if (name.value.trim()) rememberName(name.value.trim())
 		emit('joined', membership)
 	} catch (e) {
-		const err = e as ApiRequestError
-		if (err instanceof ApiRequestError && err.code === 'wrong-password')
-			passwordError.value = err.message
-		else if (err instanceof ApiRequestError && err.code === 'validation')
-			nameError.value = err.message
-		else error.value = err.message
+		if (e instanceof ApiRequestError && e.code === 'wrong-password') passwordError.value = e
+		else if (e instanceof ApiRequestError && e.code === 'validation') nameError.value = e
+		else error.value = e
 	} finally {
 		submitting.value = false
 	}
@@ -56,20 +56,20 @@ async function submit() {
 
 <template>
 	<form class="join" @submit.prevent="submit">
-		<NameField v-model="name" :error="nameError" :room="preview.code" />
+		<NameField v-model="name" :error="nameError ? errorText(nameError) : null" :room="preview.code" />
 		<AppField
 			v-if="preview.hasPassword"
 			v-model="password"
 			type="password"
-			label="Mot de passe du salon"
+			:label="t('join.password')"
 			autocomplete="current-password"
-			:error="passwordError"
+			:error="passwordError ? errorText(passwordError) : null"
 			required
 		/>
-		<AppSegmented v-model="role" label="Comment voulez-vous participer ?" :options="roles" />
-		<p v-if="error" class="join__error" role="alert">{{ error }}</p>
+		<AppSegmented v-model="role" :label="t('join.how')" :options="roles" />
+		<p v-if="error" class="join__error" role="alert">{{ errorText(error) }}</p>
 		<AppButton type="submit" size="lg" block :loading="submitting" icon-right="arrowRight">
-			{{ role === 'player' ? 'C’est parti !' : 'Entrer en spectateur' }}
+			{{ role === 'player' ? t('join.submitPlayer') : t('join.submitSpectator') }}
 		</AppButton>
 	</form>
 </template>
