@@ -1,8 +1,9 @@
+import { Logger } from '@Voikyrioh/observability'
 import { CLOSE_CODES, type ServerMessage } from '@bingo/shared'
+import { SpanStatusCode, trace } from '@opentelemetry/api'
 import type { RoomService, Session } from '../../application/room.service'
 import { DomainError } from '../../domain/errors'
 import type { ConnectionHub, Socket } from '../../infrastructure/realtime/connection-hub'
-import { logger } from '../../logger'
 import { clientMessageSchema } from '../schemas'
 
 export interface ConnectionDeps {
@@ -15,6 +16,7 @@ export interface ConnectionDeps {
 }
 
 const MAX_MESSAGE_BYTES = 4096
+const tracer = trace.getTracer('bingo/websocket')
 
 /**
  * One WebSocket of a room, independent of the server library: it receives
@@ -45,8 +47,33 @@ export class RoomConnection {
 
 	receive(data: string): Promise<void> {
 		this.resetIdle()
-		this.queue = this.queue.then(() => this.handle(data)).catch((error) => this.fail(error))
+		this.queue = this.queue.then(() => this.traced(data))
 		return this.queue
+	}
+
+	/**
+	 * One span per WebSocket message (`WS toggle`, `WS chat`...), the
+	 * counterpart of the request spans of otelHono: database queries made while
+	 * handling it are its children in SigNoz.
+	 */
+	private traced(data: string): Promise<void> {
+		return tracer.startActiveSpan('WS message', async (span) => {
+			span.setAttribute('bingo.room.code', this.code)
+			try {
+				await this.handle(data, (type) => span.updateName(`WS ${type}`))
+			} catch (error) {
+				if (error instanceof DomainError) {
+					span.setAttribute('bingo.error.code', error.code)
+					span.setAttribute('bingo.error.key', error.key)
+				} else {
+					span.recordException(error instanceof Error ? error : new Error(String(error)))
+					span.setStatus({ code: SpanStatusCode.ERROR })
+				}
+				this.fail(error)
+			} finally {
+				span.end()
+			}
+		})
 	}
 
 	close(): void {
@@ -59,22 +86,23 @@ export class RoomConnection {
 		}
 	}
 
-	private async handle(data: string): Promise<void> {
+	private async handle(data: string, named: (type: string) => void): Promise<void> {
 		if (this.closed) return
 		if (data.length > MAX_MESSAGE_BYTES) {
-			return this.send({ type: 'error', code: 'validation', message: 'Message trop long.' })
+			return this.send({ type: 'error', code: 'validation', key: 'messageTooLong' })
 		}
 		let json: unknown
 		try {
 			json = JSON.parse(data)
 		} catch {
-			return this.send({ type: 'error', code: 'validation', message: 'Message illisible.' })
+			return this.send({ type: 'error', code: 'validation', key: 'messageUnreadable' })
 		}
 		const parsed = clientMessageSchema.safeParse(json)
 		if (!parsed.success) {
-			return this.send({ type: 'error', code: 'validation', message: 'Message invalide.' })
+			return this.send({ type: 'error', code: 'validation', key: 'messageInvalid' })
 		}
 		const message = parsed.data
+		named(message.type)
 		const { rooms, hub } = this.deps
 
 		if (!this.session) {
@@ -115,13 +143,13 @@ export class RoomConnection {
 
 	private fail(error: unknown): void {
 		if (error instanceof DomainError) {
-			this.send({ type: 'error', code: error.code, message: error.message })
+			this.send({ type: 'error', code: error.code, key: error.key, params: error.params })
 			if (error.code === 'unauthorized') this.socket.close(CLOSE_CODES.unauthorized)
 			if (error.code === 'room-closed') this.socket.close(CLOSE_CODES.roomClosed)
 			return
 		}
-		logger.error('WebSocket message failed', { error: (error as Error)?.message })
-		this.send({ type: 'error', code: 'internal', message: 'Oups, une erreur inattendue.' })
+		Logger.error({ err: error, room: this.code }, 'WebSocket message failed')
+		this.send({ type: 'error', code: 'internal', key: 'internal' })
 	}
 
 	private send(message: ServerMessage): void {

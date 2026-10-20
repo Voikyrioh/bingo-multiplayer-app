@@ -7,6 +7,7 @@ const preview = {
 	code: 'ABC234',
 	name: 'Salon',
 	dictionaryTitle: 'Discours',
+	language: 'fr' as const,
 	gridSize: 5,
 	hasPassword: true,
 	players: 3,

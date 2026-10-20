@@ -1,21 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import JoinByCode from '../components/JoinByCode.vue'
 import RoomList from '../components/RoomList.vue'
 import AppButton from '../components/ui/AppButton.vue'
+import { splitMarked } from '../i18n/marked'
+import { useI18n } from '../i18n/useI18n'
+import { usePageTitle } from '../i18n/usePageTitle'
+
+const { t } = useI18n()
+usePageTitle(() => null)
+const title = computed(() => splitMarked(t('home.title')))
 
 // Decorative grid of the hero: checked cells and one winning diagonal.
-const demo = [
-	'En même temps',
-	'Tu m’entends ?',
-	'Penalty !',
-	'De mon temps…',
-	'Synergie',
-	'Café froid',
-	'Mes chers compatriotes',
-	'Ola',
-	'Le fromage !',
-]
+// Each language puts its own typical bingo phrases there.
+const demo = computed(() => Array.from({ length: 9 }, (_, i) => t(`home.demo.${i}`)))
 const demoChecked = new Set([0, 4, 8, 2])
 const demoLine = new Set([0, 4, 8])
 </script>
@@ -23,15 +22,12 @@ const demoLine = new Set([0, 4, 8])
 <template>
 	<section class="hero container">
 		<div class="hero__text">
-			<p class="hero__eyebrow">Discours, réunions, repas de famille, matchs…</p>
-			<h1 class="hero__title">Le bingo <span class="hero__mark">en direct</span>, à plusieurs.</h1>
-			<p class="hero__lead">
-				Choisissez un dictionnaire d’expressions, partagez le lien : chacun reçoit sa propre grille et
-				tout le monde voit qui s’approche du carton plein.
-			</p>
+			<p class="hero__eyebrow">{{ t('home.eyebrow') }}</p>
+			<h1 class="hero__title">{{ title.before }}<span v-if="title.mark" class="hero__mark">{{ title.mark }}</span>{{ title.after }}</h1>
+			<p class="hero__lead">{{ t('home.lead') }}</p>
 			<div class="hero__cta">
-				<AppButton to="/creer" size="lg" icon="users">Créer un salon</AppButton>
-				<AppButton to="/solo" size="lg" variant="secondary" icon="play">Jouer en solo</AppButton>
+				<AppButton to="/creer" size="lg" icon="users">{{ t('rooms.create') }}</AppButton>
+				<AppButton to="/solo" size="lg" variant="secondary" icon="play">{{ t('home.solo') }}</AppButton>
 			</div>
 			<div class="hero__code"><JoinByCode /></div>
 		</div>
@@ -39,41 +35,31 @@ const demoLine = new Set([0, 4, 8])
 			<div class="demo">
 				<span
 					v-for="(text, i) in demo"
-					:key="text"
+					:key="i"
 					class="demo__cell"
 					:class="{ 'demo__cell--checked': demoChecked.has(i), 'demo__cell--line': demoLine.has(i) }"
 					:style="{ '--i': i }"
 				>{{ text }}</span>
 			</div>
-			<span class="demo__sticker">BINGO !</span>
+			<span class="demo__sticker">{{ t('banner.bingo') }}</span>
 		</div>
 	</section>
 
 	<section class="container section" aria-labelledby="live-title">
 		<div class="section__head">
-			<h2 id="live-title">Salons en cours</h2>
-			<RouterLink to="/salons">Tous les salons →</RouterLink>
+			<h2 id="live-title">{{ t('home.liveRooms') }}</h2>
+			<RouterLink to="/salons">{{ t('home.allRooms') }}</RouterLink>
 		</div>
 		<RoomList :limit="6" />
 	</section>
 
 	<section class="container section" aria-labelledby="how-title">
-		<h2 id="how-title" class="section__title">Comment ça marche ?</h2>
+		<h2 id="how-title" class="section__title">{{ t('home.howTitle') }}</h2>
 		<ol class="steps">
-			<li class="step card">
-				<span class="step__num">1</span>
-				<h3>Choisissez les expressions</h3>
-				<p>Un dictionnaire tout prêt, ou le vôtre en une minute (une expression par ligne).</p>
-			</li>
-			<li class="step card">
-				<span class="step__num">2</span>
-				<h3>Partagez le lien</h3>
-				<p>Jusqu’à 50 joueurs par salon, avec ou sans mot de passe. Les curieux peuvent regarder.</p>
-			</li>
-			<li class="step card">
-				<span class="step__num">3</span>
-				<h3>Cochez en direct</h3>
-				<p>Chaque ligne, diagonale ou carton plein est annoncé à tout le salon. Confettis garantis.</p>
+			<li v-for="step in [1, 2, 3]" :key="step" class="step card">
+				<span class="step__num">{{ step }}</span>
+				<h3>{{ t(`home.step${step}.title`) }}</h3>
+				<p>{{ t(`home.step${step}.text`, { max: 50 }) }}</p>
 			</li>
 		</ol>
 	</section>

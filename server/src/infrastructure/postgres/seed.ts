@@ -12,13 +12,13 @@ export async function seed(pool: pg.Pool): Promise<void> {
 		await client.query('BEGIN')
 		for (const d of FEATURED_DICTIONARIES) {
 			await client.query(
-				`INSERT INTO dictionaries (id, code, title, description, entries, free_space, is_public, featured)
-				 VALUES ($1, $2, $3, $4, $5, $6, true, true)
+				`INSERT INTO dictionaries (id, code, title, description, entries, free_space, is_public, featured, language)
+				 VALUES ($1, $2, $3, $4, $5, $6, true, true, $7)
 				 ON CONFLICT (id) DO UPDATE SET
 					code = EXCLUDED.code, title = EXCLUDED.title, description = EXCLUDED.description,
 					entries = EXCLUDED.entries, free_space = EXCLUDED.free_space,
-					is_public = true, featured = true`,
-				[d.id, d.code, d.title, d.description, JSON.stringify(d.entries), d.freeSpace],
+					language = EXCLUDED.language, is_public = true, featured = true`,
+				[d.id, d.code, d.title, d.description, JSON.stringify(d.entries), d.freeSpace, d.language],
 			)
 		}
 		await client.query(

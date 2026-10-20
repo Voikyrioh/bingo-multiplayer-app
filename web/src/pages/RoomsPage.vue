@@ -2,16 +2,21 @@
 import JoinByCode from '../components/JoinByCode.vue'
 import RoomList from '../components/RoomList.vue'
 import AppButton from '../components/ui/AppButton.vue'
+import { useI18n } from '../i18n/useI18n'
+import { usePageTitle } from '../i18n/usePageTitle'
+
+const { t } = useI18n()
+usePageTitle(() => t('home.liveRooms'))
 </script>
 
 <template>
 	<div class="container page">
 		<header class="page__head">
 			<div>
-				<h1>Salons en cours</h1>
-				<p class="muted">Les salons publics, mis à jour en direct. Le cadenas indique un mot de passe.</p>
+				<h1>{{ t('home.liveRooms') }}</h1>
+				<p class="muted">{{ t('roomsPage.lead') }}</p>
 			</div>
-			<AppButton to="/creer" icon="plus">Créer un salon</AppButton>
+			<AppButton to="/creer" icon="plus">{{ t('rooms.create') }}</AppButton>
 		</header>
 		<div class="page__code"><JoinByCode /></div>
 		<RoomList />

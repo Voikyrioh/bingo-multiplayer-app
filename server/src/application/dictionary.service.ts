@@ -1,6 +1,6 @@
-import type { CreateDictionaryRequest, DictionarySummary, DictionaryView } from '@bingo/shared'
+import type { DictionarySummary, DictionaryView, LanguageCode } from '@bingo/shared'
 import { dictionaryCode } from '../domain/codes'
-import { validateDictionary } from '../domain/dictionary'
+import { type DictionaryDraft, validateDictionary } from '../domain/dictionary'
 import { notFound } from '../domain/errors'
 import type { Random } from '../domain/random'
 import type { Clock, DictionaryRepository, IdGenerator } from './ports'
@@ -18,7 +18,8 @@ const LISTED_LIMIT = 100
 export class DictionaryService {
 	constructor(private readonly deps: DictionaryServiceDeps) {}
 
-	async create(request: CreateDictionaryRequest): Promise<DictionaryView> {
+	/** The language arrives unchecked from the client: the domain validates it. */
+	async create(request: DictionaryDraft): Promise<DictionaryView> {
 		const draft = validateDictionary(request)
 		const { dictionaries, clock, ids, random } = this.deps
 		let code = dictionaryCode(random)
@@ -36,12 +37,12 @@ export class DictionaryService {
 
 	async get(code: string): Promise<DictionaryView> {
 		const dictionary = await this.deps.dictionaries.findByCode(code)
-		if (!dictionary) throw notFound('Ce dictionnaire n’existe pas.')
+		if (!dictionary) throw notFound('dictionaryNotFound')
 		return dictionaryView(dictionary)
 	}
 
-	async listListed(): Promise<DictionarySummary[]> {
-		const list = await this.deps.dictionaries.listListed(LISTED_LIMIT)
+	async listListed(language?: LanguageCode): Promise<DictionarySummary[]> {
+		const list = await this.deps.dictionaries.listListed(LISTED_LIMIT, language)
 		return list.map(dictionarySummary)
 	}
 }

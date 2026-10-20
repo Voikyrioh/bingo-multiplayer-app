@@ -1,4 +1,4 @@
-import { LIMITS } from '@bingo/shared'
+import { isLanguageCode, type LanguageCode, LIMITS } from '@bingo/shared'
 import { validation } from './errors'
 import { cleanText, comparisonKey } from './text'
 
@@ -6,6 +6,8 @@ export interface Dictionary {
 	id: string
 	/** Public share code, used in links (/d/<code>). */
 	code: string
+	/** Language the expressions are written in. Dictionaries are never translated. */
+	language: LanguageCode
 	title: string
 	description: string
 	entries: string[]
@@ -19,6 +21,7 @@ export interface Dictionary {
 }
 
 export interface DictionaryDraft {
+	language: string
 	title: string
 	description?: string | null
 	entries: string[]
@@ -26,7 +29,10 @@ export interface DictionaryDraft {
 	isPublic: boolean
 }
 
-export type ValidDictionaryDraft = Required<Omit<DictionaryDraft, 'description' | 'freeSpace'>> & {
+export type ValidDictionaryDraft = Required<
+	Omit<DictionaryDraft, 'description' | 'freeSpace' | 'language'>
+> & {
+	language: LanguageCode
 	description: string
 	freeSpace: string | null
 }
@@ -36,17 +42,17 @@ export type ValidDictionaryDraft = Required<Omit<DictionaryDraft, 'description' 
  * (case and accent insensitive), then checks every limit.
  */
 export function validateDictionary(draft: DictionaryDraft): ValidDictionaryDraft {
+	if (!isLanguageCode(draft.language)) throw validation('dictionaryLanguageInvalid')
 	const title = cleanText(draft.title)
 	if (title.length < LIMITS.dictionaryTitleMin || title.length > LIMITS.dictionaryTitleMax) {
-		throw validation(
-			`Le titre doit faire entre ${LIMITS.dictionaryTitleMin} et ${LIMITS.dictionaryTitleMax} caractères.`,
-		)
+		throw validation('dictionaryTitleLength', {
+			min: LIMITS.dictionaryTitleMin,
+			max: LIMITS.dictionaryTitleMax,
+		})
 	}
 	const description = cleanText(draft.description ?? '')
 	if (description.length > LIMITS.dictionaryDescriptionMax) {
-		throw validation(
-			`La description ne doit pas dépasser ${LIMITS.dictionaryDescriptionMax} caractères.`,
-		)
+		throw validation('dictionaryDescriptionTooLong', { max: LIMITS.dictionaryDescriptionMax })
 	}
 	const seen = new Set<string>()
 	const entries: string[] = []
@@ -54,7 +60,7 @@ export function validateDictionary(draft: DictionaryDraft): ValidDictionaryDraft
 		const entry = cleanText(raw)
 		if (!entry) continue
 		if (entry.length > LIMITS.entryMax) {
-			throw validation(`« ${entry.slice(0, 20)}… » dépasse ${LIMITS.entryMax} caractères.`)
+			throw validation('entryTooLong', { entry: `${entry.slice(0, 20)}…`, max: LIMITS.entryMax })
 		}
 		const key = comparisonKey(entry)
 		if (seen.has(key)) continue
@@ -62,16 +68,24 @@ export function validateDictionary(draft: DictionaryDraft): ValidDictionaryDraft
 		entries.push(entry)
 	}
 	if (entries.length < LIMITS.dictionaryEntriesMin) {
-		throw validation(
-			`Il faut au moins ${LIMITS.dictionaryEntriesMin} expressions différentes (${entries.length} pour l'instant).`,
-		)
+		throw validation('dictionaryTooFewEntries', {
+			min: LIMITS.dictionaryEntriesMin,
+			count: entries.length,
+		})
 	}
 	if (entries.length > LIMITS.dictionaryEntriesMax) {
-		throw validation(`Un dictionnaire contient au plus ${LIMITS.dictionaryEntriesMax} expressions.`)
+		throw validation('dictionaryTooManyEntries', { max: LIMITS.dictionaryEntriesMax })
 	}
 	const freeSpace = cleanText(draft.freeSpace ?? '') || null
 	if (freeSpace && freeSpace.length > LIMITS.freeSpaceMax) {
-		throw validation(`La case gratuite ne doit pas dépasser ${LIMITS.freeSpaceMax} caractères.`)
+		throw validation('freeSpaceTooLong', { max: LIMITS.freeSpaceMax })
 	}
-	return { title, description, entries, freeSpace, isPublic: draft.isPublic }
+	return {
+		language: draft.language,
+		title,
+		description,
+		entries,
+		freeSpace,
+		isPublic: draft.isPublic,
+	}
 }

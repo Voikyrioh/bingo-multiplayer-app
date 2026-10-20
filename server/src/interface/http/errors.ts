@@ -1,8 +1,8 @@
-import type { ApiError } from '@bingo/shared'
+import { Logger } from '@Voikyrioh/observability'
+import type { ApiError, TextParams } from '@bingo/shared'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { DomainError, type DomainErrorCode } from '../../domain/errors'
-import { logger } from '../../logger'
 
 const STATUS: Record<DomainErrorCode, ContentfulStatusCode> = {
 	validation: 400,
@@ -16,21 +16,20 @@ const STATUS: Record<DomainErrorCode, ContentfulStatusCode> = {
 	'rate-limited': 429,
 }
 
-export function errorBody(code: string, message: string): ApiError {
-	return { code, message }
+/** `key` is translated by the client, in its `error.` namespace. */
+export function errorBody(code: string, key: string, params?: TextParams): ApiError {
+	return params && Object.keys(params).length ? { code, key, params } : { code, key }
 }
 
 export function onError(error: Error, c: Context) {
 	if (error instanceof DomainError) {
-		return c.json(errorBody(error.code, error.message), STATUS[error.code])
+		return c.json(errorBody(error.code, error.key, error.params), STATUS[error.code])
 	}
-	logger.error('Unhandled error', { path: c.req.path, error: error.message, stack: error.stack })
-	return c.json(
-		errorBody('internal', 'Oups, une erreur inattendue. Réessayez dans un instant.'),
-		500,
-	)
+	// Inside the request span (otelHono): the log line carries its traceId.
+	Logger.error({ err: error, path: c.req.path }, 'Unhandled error')
+	return c.json(errorBody('internal', 'internal'), 500)
 }
 
 export function onNotFound(c: Context) {
-	return c.json(errorBody('not-found', 'Route inconnue.'), 404)
+	return c.json(errorBody('not-found', 'routeNotFound'), 404)
 }

@@ -5,18 +5,22 @@ import type {
 	DictionarySummary,
 	DictionaryView,
 	JoinRoomRequest,
+	LanguageCode,
 	Membership,
 	RoomPreview,
 	RoomSummary,
+	TextParams,
 } from '@bingo/shared'
 
+/** `key` (+ `params`) is translated in the `error.` namespace (useI18n().errorText). */
 export class ApiRequestError extends Error {
 	constructor(
 		readonly status: number,
 		readonly code: string,
-		message: string,
+		readonly key: string,
+		readonly params: TextParams = {},
 	) {
-		super(message)
+		super(key)
 	}
 }
 
@@ -28,7 +32,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 			headers: { accept: 'application/json', 'content-type': 'application/json', ...init?.headers },
 		})
 	} catch {
-		throw new ApiRequestError(0, 'network', 'Connexion impossible. Vérifiez votre réseau.')
+		throw new ApiRequestError(0, 'network', 'network')
 	}
 	const body = (await response.json().catch(() => null)) as T | ApiError | null
 	if (!response.ok) {
@@ -36,7 +40,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 		throw new ApiRequestError(
 			response.status,
 			error?.code ?? 'internal',
-			error?.message ?? 'Oups, une erreur inattendue.',
+			error?.key ?? 'internal',
+			error?.params,
 		)
 	}
 	return body as T
@@ -46,11 +51,14 @@ const post = <T>(path: string, body: unknown) =>
 	request<T>(path, { method: 'POST', body: JSON.stringify(body) })
 
 export const api = {
-	listDictionaries: () => request<DictionarySummary[]>('/dictionaries'),
+	/** Without language: every language. */
+	listDictionaries: (language?: LanguageCode) =>
+		request<DictionarySummary[]>(`/dictionaries${language ? `?language=${language}` : ''}`),
 	getDictionary: (code: string) =>
 		request<DictionaryView>(`/dictionaries/${encodeURIComponent(code)}`),
 	createDictionary: (body: CreateDictionaryRequest) => post<DictionaryView>('/dictionaries', body),
-	listRooms: () => request<RoomSummary[]>('/rooms'),
+	listRooms: (language?: LanguageCode) =>
+		request<RoomSummary[]>(`/rooms${language ? `?language=${language}` : ''}`),
 	previewRoom: (code: string) => request<RoomPreview>(`/rooms/${encodeURIComponent(code)}`),
 	createRoom: (body: CreateRoomRequest) => post<Membership>('/rooms', body),
 	joinRoom: (code: string, body: JoinRoomRequest) =>

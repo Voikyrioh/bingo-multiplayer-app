@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import type { DictionarySummary } from '@bingo/shared'
-import { computed, onMounted, ref, watchEffect } from 'vue'
+import type { DictionarySummary, LanguageCode } from '@bingo/shared'
+import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import { api } from '../api/http'
+import { useI18n } from '../i18n/useI18n'
+import LanguageFilter from './LanguageFilter.vue'
+import AppButton from './ui/AppButton.vue'
 import AppIcon from './ui/AppIcon.vue'
 
 /** Selected dictionary code, or 'new' for "I write my own". */
@@ -9,67 +12,106 @@ const model = defineModel<string>({ required: true })
 /** Title of the selected dictionary (empty for 'new'). */
 const title = defineModel<string>('title', { default: '' })
 const props = defineProps<{ needed: number; extra?: DictionarySummary | null }>()
+const { t, tc, errorText, language } = useI18n()
 
 const all = ref<DictionarySummary[]>([])
 const loading = ref(true)
-const error = ref<string | null>(null)
+const error = ref<unknown>(null)
+// Dictionaries are never translated: they are filtered by the language they are written in.
+const filter = ref<LanguageCode | 'all'>(props.extra?.language ?? language.value.code)
 
 onMounted(async () => {
 	try {
 		all.value = await api.listDictionaries()
 	} catch (e) {
-		error.value = (e as Error).message
+		error.value = e
 	} finally {
 		loading.value = false
 	}
 })
 
-const featured = computed(() => {
-	const list = all.value.filter((d) => d.featured)
-	if (props.extra && !all.value.some((d) => d.code === props.extra?.code)) list.unshift(props.extra)
+// A dictionary shared by link (/d/<code>) brings its language.
+watch(
+	() => props.extra,
+	(extra) => {
+		if (extra) filter.value = extra.language
+	},
+)
+
+const known = computed(() => {
+	const list = [...all.value]
+	if (props.extra && !list.some((d) => d.code === props.extra?.code)) list.unshift(props.extra)
 	return list
 })
-const community = computed(() => all.value.filter((d) => !d.featured))
+const visible = computed(() =>
+	known.value.filter((d) => filter.value === 'all' || d.language === filter.value),
+)
+const featured = computed(() =>
+	visible.value.filter((d) => d.featured || d.code === props.extra?.code),
+)
+const community = computed(() => visible.value.filter((d) => !featured.value.includes(d)))
+
+// The selection always stays visible: when the filter hides it, the first
+// usable dictionary of the filter is picked, or "write my own".
+watch(
+	[visible, loading],
+	() => {
+		if (loading.value || model.value === 'new') return
+		if (visible.value.some((d) => d.code === model.value)) return
+		model.value = visible.value.find((d) => d.entryCount >= props.needed)?.code ?? 'new'
+	},
+	{ immediate: true },
+)
 
 watchEffect(() => {
-	const selected = [...featured.value, ...community.value].find((d) => d.code === model.value)
-	title.value = selected?.title ?? ''
+	title.value = known.value.find((d) => d.code === model.value)?.title ?? ''
 })
 </script>
 
 <template>
 	<fieldset class="picker">
-		<legend class="visually-hidden">Choisissez un dictionnaire</legend>
-		<p v-if="loading" class="muted">Chargement des dictionnaires…</p>
-		<p v-else-if="error" class="muted">{{ error }}</p>
+		<legend class="visually-hidden">{{ t('dict.choose') }}</legend>
+		<LanguageFilter v-model="filter" :label="t('dict.filterLabel')" class="picker__filter" />
+		<p v-if="loading" class="muted">{{ t('dict.loading') }}</p>
+		<p v-else-if="error" class="muted">{{ errorText(error) }}</p>
+		<div v-else-if="visible.length === 0" class="picker__empty">
+			<p>{{ t('dict.emptyInLanguage') }}</p>
+			<AppButton variant="secondary" size="sm" icon="globe" @click="filter = 'all'">{{ t('filter.showAll') }}</AppButton>
+		</div>
 		<div class="picker__grid">
 			<label class="option option--new">
 				<input v-model="model" type="radio" name="dictionary" value="new" class="option__input" />
 				<span class="option__card">
 					<span class="option__icon" aria-hidden="true"><AppIcon name="plus" :size="26" /></span>
-					<span class="option__title">Créer le mien</span>
-					<span class="option__desc">Écrivez vos propres expressions.</span>
+					<span class="option__title">{{ t('dict.createOwn') }}</span>
+					<span class="option__desc">{{ t('dict.createOwnHint') }}</span>
 				</span>
 			</label>
 			<label v-for="d in featured" :key="d.code" class="option" :class="{ 'option--disabled': d.entryCount < needed }">
 				<input v-model="model" type="radio" name="dictionary" :value="d.code" class="option__input" :disabled="d.entryCount < needed" />
-				<span class="option__card">
-					<span v-if="d.featured" class="option__badge">Populaire</span>
+				<span class="option__card" :lang="d.language">
+					<span class="option__badges">
+						<span v-if="d.featured" class="option__badge">{{ t('dict.featured') }}</span>
+						<span class="option__lang" :title="d.language">{{ d.language }}</span>
+					</span>
 					<span class="option__title">{{ d.title }}</span>
-					<span class="option__desc">{{ d.description }}</span>
-					<span class="option__count">{{ d.entryCount }} expressions</span>
+					<span v-if="d.description" class="option__desc">{{ d.description }}</span>
+					<span class="option__count">{{ tc('dict.entries', d.entryCount) }}</span>
 				</span>
 			</label>
 		</div>
 		<template v-if="community.length">
-			<h3 class="picker__section">De la communauté</h3>
+			<h3 class="picker__section">{{ t('dict.community') }}</h3>
 			<div class="picker__grid">
 				<label v-for="d in community" :key="d.code" class="option" :class="{ 'option--disabled': d.entryCount < needed }">
 					<input v-model="model" type="radio" name="dictionary" :value="d.code" class="option__input" :disabled="d.entryCount < needed" />
-					<span class="option__card">
+					<span class="option__card" :lang="d.language">
+						<span class="option__badges">
+							<span class="option__lang" :title="d.language">{{ d.language }}</span>
+						</span>
 						<span class="option__title">{{ d.title }}</span>
 						<span v-if="d.description" class="option__desc">{{ d.description }}</span>
-						<span class="option__count">{{ d.entryCount }} expressions</span>
+						<span class="option__count">{{ tc('dict.entries', d.entryCount) }}</span>
 					</span>
 				</label>
 			</div>
@@ -159,6 +201,33 @@ watchEffect(() => {
 	border-radius: 50%;
 	background: var(--sun);
 	color: #1f1b2e;
+}
+.option__badges {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.option__lang {
+	padding: 0 6px;
+	border: 2px solid var(--line);
+	border-radius: 6px;
+	background: var(--sky-soft);
+	font-family: var(--font-display);
+	font-size: 0.72rem;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+.picker__filter {
+	justify-self: start;
+}
+.picker__empty {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 2px dashed var(--ink-3);
+	border-radius: var(--radius-m);
 }
 .option__badge {
 	justify-self: start;

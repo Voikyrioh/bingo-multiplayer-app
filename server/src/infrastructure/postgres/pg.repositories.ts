@@ -1,3 +1,4 @@
+import type { LanguageCode, TextParams } from '@bingo/shared'
 import type pg from 'pg'
 import type {
 	DictionaryRepository,
@@ -16,6 +17,7 @@ import type { Message, NewMessage, Participant, Room } from '../../domain/room'
 interface DictionaryRow {
 	id: string
 	code: string
+	language: LanguageCode
 	title: string
 	description: string
 	entries: string[]
@@ -28,6 +30,7 @@ interface DictionaryRow {
 const toDictionary = (r: DictionaryRow): Dictionary => ({
 	id: r.id,
 	code: r.code,
+	language: r.language,
 	title: r.title,
 	description: r.description,
 	entries: r.entries,
@@ -42,8 +45,8 @@ export class PgDictionaryRepository implements DictionaryRepository {
 
 	async create(d: Dictionary) {
 		await this.pool.query(
-			`INSERT INTO dictionaries (id, code, title, description, entries, free_space, is_public, featured, created_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			`INSERT INTO dictionaries (id, code, title, description, entries, free_space, is_public, featured, created_at, language)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			[
 				d.id,
 				d.code,
@@ -54,6 +57,7 @@ export class PgDictionaryRepository implements DictionaryRepository {
 				d.isPublic,
 				d.featured,
 				d.createdAt,
+				d.language,
 			],
 		)
 	}
@@ -74,11 +78,11 @@ export class PgDictionaryRepository implements DictionaryRepository {
 		return rows[0] ? toDictionary(rows[0]) : null
 	}
 
-	async listListed(limit: number) {
+	async listListed(limit: number, language?: LanguageCode) {
 		const { rows } = await this.pool.query<DictionaryRow>(
-			`SELECT * FROM dictionaries WHERE is_public OR featured
+			`SELECT * FROM dictionaries WHERE (is_public OR featured) AND ($2::text IS NULL OR language = $2)
 			 ORDER BY featured DESC, created_at DESC LIMIT $1`,
-			[limit],
+			[limit, language ?? null],
 		)
 		return rows.map(toDictionary)
 	}
@@ -107,6 +111,7 @@ interface RoomRow {
 	dictionary_id: string
 	dictionary_code: string
 	dictionary_title: string
+	dictionary_language: LanguageCode
 	grid_size: number
 	free_center: boolean
 	owner_id: string | null
@@ -115,7 +120,8 @@ interface RoomRow {
 	closed_at: Date | null
 }
 
-const ROOM_SELECT = `SELECT r.*, d.code AS dictionary_code, d.title AS dictionary_title
+const ROOM_SELECT = `SELECT r.*, d.code AS dictionary_code, d.title AS dictionary_title,
+	d.language AS dictionary_language
 	FROM rooms r JOIN dictionaries d ON d.id = r.dictionary_id`
 
 const toRoom = (r: RoomRow): Room => ({
@@ -125,7 +131,12 @@ const toRoom = (r: RoomRow): Room => ({
 	mode: r.mode,
 	visibility: r.visibility,
 	passwordHash: r.password_hash,
-	dictionary: { id: r.dictionary_id, code: r.dictionary_code, title: r.dictionary_title },
+	dictionary: {
+		id: r.dictionary_id,
+		code: r.dictionary_code,
+		title: r.dictionary_title,
+		language: r.dictionary_language,
+	},
 	gridSize: r.grid_size,
 	freeCenter: r.free_center,
 	ownerId: r.owner_id,
@@ -167,6 +178,8 @@ interface MessageRow {
 	author_id: string | null
 	author_name: string | null
 	text: string
+	key: string | null
+	params: TextParams | null
 	announcement: Message['announcement']
 	created_at: Date
 }
@@ -178,6 +191,8 @@ const toMessage = (r: MessageRow): Message => ({
 	authorId: r.author_id,
 	authorName: r.author_name,
 	text: r.text,
+	key: r.key,
+	params: r.params,
 	announcement: r.announcement,
 	createdAt: r.created_at,
 })
@@ -236,19 +251,21 @@ export class PgRoomRepository implements RoomRepository {
 		)
 	}
 
-	async listOpenPublic(limit: number): Promise<OpenRoomRow[]> {
+	async listOpenPublic(limit: number, language?: LanguageCode): Promise<OpenRoomRow[]> {
 		const { rows } = await this.pool.query<RoomRow & { players: number; spectators: number }>(
 			`SELECT r.*, d.code AS dictionary_code, d.title AS dictionary_title,
+				d.language AS dictionary_language,
 				count(p.id) FILTER (WHERE p.role = 'player')::int AS players,
 				count(p.id) FILTER (WHERE p.role = 'spectator')::int AS spectators
 			 FROM rooms r
 			 JOIN dictionaries d ON d.id = r.dictionary_id
 			 LEFT JOIN participants p ON p.room_id = r.id
 			 WHERE r.closed_at IS NULL AND r.visibility = 'public' AND r.mode = 'multi'
-			 GROUP BY r.id, d.code, d.title
+				AND ($2::text IS NULL OR d.language = $2)
+			 GROUP BY r.id, d.code, d.title, d.language
 			 ORDER BY players DESC, r.last_activity_at DESC
 			 LIMIT $1`,
-			[limit],
+			[limit, language ?? null],
 		)
 		return rows.map((r) => ({ room: toRoom(r), players: r.players, spectators: r.spectators }))
 	}
@@ -322,8 +339,8 @@ export class PgRoomRepository implements RoomRepository {
 
 	async addMessage(message: NewMessage) {
 		const { rows } = await this.pool.query<MessageRow>(
-			`INSERT INTO messages (room_id, kind, author_id, author_name, text, announcement, created_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+			`INSERT INTO messages (room_id, kind, author_id, author_name, text, announcement, created_at, key, params)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
 			[
 				message.roomId,
 				message.kind,
@@ -332,6 +349,8 @@ export class PgRoomRepository implements RoomRepository {
 				message.text,
 				message.announcement,
 				message.createdAt,
+				message.key,
+				message.params ? JSON.stringify(message.params) : null,
 			],
 		)
 		return toMessage(rows[0] as MessageRow)

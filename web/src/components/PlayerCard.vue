@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ParticipantView } from '@bingo/shared'
 import { computed } from 'vue'
+import { useI18n } from '../i18n/useI18n'
 import MiniGrid from './MiniGrid.vue'
 import AppIcon from './ui/AppIcon.vue'
 
@@ -12,14 +13,18 @@ const props = defineProps<{
 	canKick: boolean
 }>()
 defineEmits<{ open: []; kick: [] }>()
+const { t, tc } = useI18n()
 
 const lines = computed(() => props.participant.completedLines.length)
 const isPlayer = computed(() => props.participant.role === 'player' && props.participant.cells)
 const summary = computed(() => {
-	if (!isPlayer.value) return 'Spectateur'
-	if (props.participant.fullAt) return 'Carton plein !'
+	if (!isPlayer.value) return t('player.spectator')
+	if (props.participant.fullAt) return t('player.full')
 	const cells = props.participant.checked.length
-	return `${cells}/${props.size * props.size} cases · ${lines.value} ligne${lines.value > 1 ? 's' : ''}`
+	return t('player.summary', {
+		cells: t('player.cells', { count: cells, total: props.size * props.size }),
+		lines: tc('player.lines', lines.value),
+	})
 })
 </script>
 
@@ -29,7 +34,7 @@ const summary = computed(() => {
 			v-if="isPlayer"
 			type="button"
 			class="player__main"
-			:aria-label="`Voir la grille de ${participant.name} : ${summary}`"
+			:aria-label="t('player.viewGrid', { name: participant.name, summary })"
 			@click="$emit('open')"
 		>
 			<MiniGrid :size="size" :total="size * size" :checked="participant.checked" :completed-lines="participant.completedLines" />
@@ -37,7 +42,7 @@ const summary = computed(() => {
 				<span class="player__name">
 					<span class="player__rank" aria-hidden="true">{{ rank }}</span>
 					<span class="player__label">{{ participant.name }}</span>
-					<span v-if="isMe" class="player__tag">vous</span>
+					<span v-if="isMe" class="player__tag">{{ t('player.you') }}</span>
 				</span>
 				<span class="player__summary">{{ summary }}</span>
 			</span>
@@ -47,26 +52,26 @@ const summary = computed(() => {
 			<span class="player__info">
 				<span class="player__name">
 					<span class="player__label">{{ participant.name }}</span>
-					<span v-if="isMe" class="player__tag">vous</span>
+					<span v-if="isMe" class="player__tag">{{ t('player.you') }}</span>
 				</span>
 				<span class="player__summary">{{ summary }}</span>
 			</span>
 		</div>
 		<span class="player__badges">
-			<span v-if="participant.isOwner" class="player__badge" title="Hôte du salon">
-				<AppIcon name="crown" :size="16" label="Hôte du salon" />
+			<span v-if="participant.isOwner" class="player__badge" :title="t('player.host')">
+				<AppIcon name="crown" :size="16" :label="t('player.host')" />
 			</span>
 			<span
 				class="player__dot"
 				:class="{ 'player__dot--on': participant.online }"
 				role="img"
-				:aria-label="participant.online ? 'En ligne' : 'Hors ligne'"
+				:aria-label="participant.online ? t('player.online') : t('player.offline')"
 			/>
 			<button
 				v-if="canKick && !isMe"
 				type="button"
 				class="player__kick"
-				:aria-label="`Exclure ${participant.name}`"
+				:aria-label="t('player.kick', { name: participant.name })"
 				@click="$emit('kick')"
 			>
 				<AppIcon name="userX" :size="18" />

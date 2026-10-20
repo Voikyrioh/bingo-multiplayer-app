@@ -6,14 +6,17 @@ import JoinForm from '../components/JoinForm.vue'
 import RoomLive from '../components/RoomLive.vue'
 import AppButton from '../components/ui/AppButton.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
+import { useI18n } from '../i18n/useI18n'
+import { usePageTitle } from '../i18n/usePageTitle'
 import { forgetMembership, membershipFor, saveMembership } from '../lib/identity'
 
 const props = defineProps<{ code: string }>()
+const { t, tc, errorText, languageName } = useI18n()
 
 const preview = ref<RoomPreview | null>(null)
 const membership = ref<Membership | null>(membershipFor(props.code))
 const problem = ref<'not-found' | 'error' | null>(null)
-const errorText = ref('')
+const failure = ref<unknown>(null)
 const loading = ref(true)
 const liveKey = ref(0)
 
@@ -22,16 +25,16 @@ async function load() {
 	problem.value = null
 	try {
 		preview.value = await api.previewRoom(props.code)
-		document.title = `${preview.value.name} · Bingo Live`
 	} catch (e) {
 		problem.value = e instanceof ApiRequestError && e.status === 404 ? 'not-found' : 'error'
-		errorText.value = (e as Error).message
+		failure.value = e
 	} finally {
 		loading.value = false
 	}
 }
 
 onMounted(load)
+usePageTitle(() => preview.value?.name ?? t('roomPage.tabTitle'))
 
 function onJoined(m: Membership) {
 	saveMembership(m)
@@ -53,54 +56,55 @@ function reconnect() {
 <template>
 	<div v-if="loading && !membership" class="container state" aria-busy="true">
 		<span class="state__spinner" aria-hidden="true" />
-		<p>Ouverture du salon…</p>
+		<p>{{ t('roomPage.opening') }}</p>
 	</div>
 
 	<div v-else-if="problem === 'not-found'" class="container state">
 		<p class="state__emoji" aria-hidden="true">🔍</p>
-		<h1>Ce salon n’existe pas</h1>
-		<p class="muted">Vérifiez le code <strong>{{ code }}</strong>, ou le salon a peut-être été supprimé.</p>
+		<h1>{{ t('roomPage.notFoundTitle') }}</h1>
+		<p class="muted">{{ t('roomPage.notFoundText', { code }) }}</p>
 		<div class="state__actions">
-			<AppButton to="/salons" icon="globe">Voir les salons</AppButton>
-			<AppButton to="/creer" variant="secondary" icon="plus">Créer un salon</AppButton>
+			<AppButton to="/salons" icon="globe">{{ t('roomPage.seeRooms') }}</AppButton>
+			<AppButton to="/creer" variant="secondary" icon="plus">{{ t('rooms.create') }}</AppButton>
 		</div>
 	</div>
 
 	<div v-else-if="problem === 'error' && !membership" class="container state">
 		<p class="state__emoji" aria-hidden="true">📡</p>
-		<h1>Impossible d’ouvrir le salon</h1>
-		<p class="muted">{{ errorText }}</p>
-		<AppButton icon="refresh" @click="load">Réessayer</AppButton>
+		<h1>{{ t('roomPage.errorTitle') }}</h1>
+		<p class="muted">{{ errorText(failure) }}</p>
+		<AppButton icon="refresh" @click="load">{{ t('common.retry') }}</AppButton>
 	</div>
 
 	<RoomLive v-else-if="membership" :key="liveKey" :membership="membership" @forget="onForget" @reconnect="reconnect" />
 
 	<div v-else-if="preview?.closed" class="container state">
 		<p class="state__emoji" aria-hidden="true">🌙</p>
-		<h1>Ce salon est fermé</h1>
-		<p class="muted">Il est resté inactif trop longtemps ou tout le monde est parti.</p>
+		<h1>{{ t('roomPage.closedTitle') }}</h1>
+		<p class="muted">{{ t('roomPage.closedText') }}</p>
 		<div class="state__actions">
-			<AppButton to="/creer" icon="plus">Créer un nouveau salon</AppButton>
+			<AppButton to="/creer" icon="plus">{{ t('room.createNew') }}</AppButton>
 		</div>
 	</div>
 
 	<div v-else-if="preview?.mode === 'solo'" class="container state">
 		<p class="state__emoji" aria-hidden="true">🧘</p>
-		<h1>C’est une partie solo</h1>
-		<p class="muted">Elle ne se rejoint pas, mais vous pouvez jouer avec le même dictionnaire.</p>
-		<AppButton to="/solo" icon="play">Lancer ma partie solo</AppButton>
+		<h1>{{ t('roomPage.soloTitle') }}</h1>
+		<p class="muted">{{ t('roomPage.soloText') }}</p>
+		<AppButton to="/solo" icon="play">{{ t('roomPage.soloStart') }}</AppButton>
 	</div>
 
 	<div v-else-if="preview" class="container join-page">
 		<section class="join-card card" aria-labelledby="join-title">
-			<p class="eyebrow">Invitation</p>
+			<p class="eyebrow">{{ t('roomPage.invitation') }}</p>
 			<h1 id="join-title">{{ preview.name }}</h1>
 			<ul class="join-card__facts">
-				<li><AppIcon name="book" :size="18" /> {{ preview.dictionaryTitle }}</li>
-				<li><AppIcon name="users" :size="18" /> {{ preview.players }}/{{ preview.maxPlayers }} joueurs</li>
-				<li v-if="preview.spectators"><AppIcon name="eye" :size="18" /> {{ preview.spectators }} spectateurs</li>
-				<li><AppIcon name="grid" :size="18" /> Grille {{ preview.gridSize }}×{{ preview.gridSize }}</li>
-				<li v-if="preview.hasPassword"><AppIcon name="lock" :size="18" /> Mot de passe requis</li>
+				<li :lang="preview.language"><AppIcon name="book" :size="18" /> {{ preview.dictionaryTitle }}</li>
+				<li><AppIcon name="language" :size="18" /> {{ languageName(preview.language) }}</li>
+				<li><AppIcon name="users" :size="18" /> {{ tc('rooms.players', preview.players, { max: preview.maxPlayers }) }}</li>
+				<li v-if="preview.spectators"><AppIcon name="eye" :size="18" /> {{ tc('rooms.spectators', preview.spectators) }}</li>
+				<li><AppIcon name="grid" :size="18" /> {{ t('rooms.gridSize', { size: preview.gridSize }) }}</li>
+				<li v-if="preview.hasPassword"><AppIcon name="lock" :size="18" /> {{ t('rooms.passwordRequired') }}</li>
 			</ul>
 			<JoinForm :preview="preview" @joined="onJoined" />
 		</section>

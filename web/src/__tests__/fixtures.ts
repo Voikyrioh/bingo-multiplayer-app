@@ -9,7 +9,7 @@ export const room: RoomView = {
 	gridSize: 3,
 	freeCenter: true,
 	ownerId: 'alice',
-	dictionary: { code: 'discours-macron', title: 'Discours' },
+	dictionary: { code: 'discours-macron', title: 'Discours', language: 'fr' },
 	createdAt: '2026-10-18T20:00:00.000Z',
 	maxPlayers: 50,
 }

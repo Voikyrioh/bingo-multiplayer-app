@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from '../i18n/useI18n'
 import { isSoundEnabled, setSoundEnabled, sounds } from '../lib/sound'
+import LanguagePicker from './LanguagePicker.vue'
 import AppIcon from './ui/AppIcon.vue'
 
+const { t } = useI18n()
 const sound = ref(isSoundEnabled())
 
 function toggleSound() {
@@ -16,21 +19,22 @@ function toggleSound() {
 <template>
 	<header class="header">
 		<div class="container header__inner">
-			<RouterLink to="/" class="logo" aria-label="Bingo Live, accueil">
+			<RouterLink to="/" class="logo" :aria-label="t('header.home')">
 				<span class="logo__ball" aria-hidden="true">B</span>
 				<span class="logo__text">Bingo<span class="logo__live">Live</span></span>
 			</RouterLink>
-			<nav class="nav" aria-label="Navigation principale">
-				<RouterLink to="/salons" class="nav__link"><AppIcon name="globe" /><span>Salons</span></RouterLink>
-				<RouterLink to="/creer" class="nav__link nav__link--cta"><AppIcon name="plus" /><span>Créer</span></RouterLink>
+			<nav class="nav" :aria-label="t('header.nav')">
+				<RouterLink to="/salons" class="nav__link"><AppIcon name="globe" /><span>{{ t('header.rooms') }}</span></RouterLink>
+				<RouterLink to="/creer" class="nav__link nav__link--cta"><AppIcon name="plus" /><span>{{ t('header.create') }}</span></RouterLink>
+				<LanguagePicker />
 				<button
 					type="button"
 					class="nav__sound"
 					:aria-pressed="sound"
-					:title="sound ? 'Couper le son' : 'Activer le son'"
+					:title="sound ? t('header.muteSound') : t('header.enableSound')"
 					@click="toggleSound"
 				>
-					<AppIcon :name="sound ? 'volume' : 'volumeOff'" :label="sound ? 'Son activé' : 'Son coupé'" />
+					<AppIcon :name="sound ? 'volume' : 'volumeOff'" :label="t('header.sound')" />
 				</button>
 			</nav>
 		</div>

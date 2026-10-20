@@ -1,3 +1,4 @@
+import { Logger } from '@Voikyrioh/observability'
 import pg from 'pg'
 import { DictionaryService } from './application/dictionary.service'
 import { NameService } from './application/name.service'
@@ -20,7 +21,6 @@ import { ConnectionHub } from './infrastructure/realtime/connection-hub'
 import { ScryptPasswordHasher } from './infrastructure/security/scrypt-password-hasher'
 import { sha256TokenService } from './infrastructure/security/sha256-token-service'
 import { cryptoIds, cryptoRandom, systemClock } from './infrastructure/system/system'
-import { logger } from './logger'
 
 /** Composition root: the only place that picks the adapters of each port. */
 export interface Container {
@@ -39,16 +39,16 @@ export async function createContainer(config: Config): Promise<Container> {
 
 	if (config.storage.kind === 'postgres') {
 		const pool = new pg.Pool({ connectionString: config.storage.url, max: config.storage.poolMax })
-		pool.on('error', (error) => logger.error('Postgres pool error', { error: error.message }))
+		pool.on('error', (error) => Logger.error({ err: error }, 'Postgres pool error'))
 		const applied = await migrate(pool, config.migrationsDir)
-		if (applied.length) logger.info('Migrations applied', { applied })
+		if (applied.length) Logger.info({ applied }, 'Migrations applied')
 		await seed(pool)
 		roomRepo = new PgRoomRepository(pool)
 		dictionaryRepo = new PgDictionaryRepository(pool)
 		names = new PgNameRepository(pool)
 		dispose = () => pool.end()
 	} else {
-		logger.warn('STORAGE=memory: everything is lost at restart')
+		Logger.warn('STORAGE=memory: everything is lost at restart')
 		roomRepo = new MemoryRoomRepository()
 		dictionaryRepo = new MemoryDictionaryRepository()
 		names = new MemoryNameRepository(cryptoRandom)

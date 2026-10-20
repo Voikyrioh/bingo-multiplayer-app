@@ -37,7 +37,12 @@ describe('HTTP API', () => {
 	it('creates a dictionary, hidden from the list unless public', async () => {
 		const { app, post } = testApp()
 		const entries = Array.from({ length: 10 }, (_, i) => `Truc ${i}`)
-		const res = await post('/api/dictionaries', { title: 'Privé', entries, isPublic: false })
+		const res = await post('/api/dictionaries', {
+			language: 'fr',
+			title: 'Privé',
+			entries,
+			isPublic: false,
+		})
 		expect(res.status).toBe(201)
 		const { code } = (await res.json()) as { code: string }
 		const list = (await (await app.request('/api/dictionaries')).json()) as { code: string }[]
@@ -98,5 +103,70 @@ describe('HTTP API', () => {
 		const statuses = []
 		for (let i = 0; i < 32; i++) statuses.push((await post('/api/rooms', {})).status)
 		expect(statuses.at(-1)).toBe(429)
+	})
+})
+
+describe('languages', () => {
+	it('filters dictionaries and rooms by language, and answers errors as keys', async () => {
+		const { app, post } = testApp()
+		const entries = Array.from({ length: 30 }, (_, i) => `Ausdruck ${i}`)
+		const created = await post('/api/dictionaries', {
+			language: 'de',
+			title: 'Weihnachtsessen',
+			entries,
+			isPublic: true,
+		})
+		const german = (await created.json()) as { code: string; language: string }
+		expect(german.language).toBe('de')
+
+		const codes = async (path: string) =>
+			((await (await app.request(path)).json()) as { code: string }[]).map((d) => d.code)
+		expect(await codes('/api/dictionaries?language=de')).toEqual([german.code])
+		expect(await codes('/api/dictionaries?language=fr')).toContain(MACRON)
+		expect(await codes('/api/dictionaries?language=fr')).not.toContain(german.code)
+		// Unknown language = no filter.
+		expect(await codes('/api/dictionaries?language=xx')).toEqual(
+			expect.arrayContaining([MACRON, german.code]),
+		)
+
+		await post('/api/rooms', { ...baseRoom, name: 'Weihnachten', dictionaryCode: german.code })
+		await post('/api/rooms', baseRoom)
+		const rooms = (await (await app.request('/api/rooms?language=de')).json()) as {
+			name: string
+			language: string
+		}[]
+		expect(rooms).toEqual([expect.objectContaining({ name: 'Weihnachten', language: 'de' })])
+
+		const bad = await post('/api/dictionaries', {
+			language: 'xx',
+			title: 'Nope',
+			entries,
+			isPublic: true,
+		})
+		expect(bad.status).toBe(400)
+		expect(await bad.json()).toEqual({ code: 'validation', key: 'dictionaryLanguageInvalid' })
+	})
+})
+
+describe('static client', () => {
+	it('serves the translation files as JSON', async () => {
+		const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+		const { join } = await import('node:path')
+		const { tmpdir } = await import('node:os')
+		const root = mkdtempSync(join(tmpdir(), 'bingo-static-'))
+		mkdirSync(join(root, 'locales'))
+		writeFileSync(join(root, 'locales', 'de-DE'), '{"app.skipToContent":"Zum Inhalt"}')
+		writeFileSync(join(root, 'index.html'), '<!doctype html><title>Bingo</title>')
+		const services = createTestServices()
+		const { app } = createApp({ ...services, publicOrigin: null, staticDir: root })
+
+		const res = await app.request('/locales/de-DE')
+		expect(res.status).toBe(200)
+		expect(res.headers.get('content-type')).toBe('application/json; charset=utf-8')
+		expect(await res.json()).toEqual({ 'app.skipToContent': 'Zum Inhalt' })
+
+		// Client routes still get the page.
+		const page = await app.request('/r/ABC234')
+		expect(page.headers.get('content-type')).toContain('text/html')
 	})
 })

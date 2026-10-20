@@ -6,12 +6,14 @@ import {
 	hasCenter,
 	isGridSize,
 	type JoinRoomRequest,
+	type LanguageCode,
 	LIMITS,
 	type Membership,
 	type ParticipantRole,
 	type RoomPreview,
 	type RoomSummary,
 	type ServerMessage,
+	type TextParams,
 } from '@bingo/shared'
 import { normalizeRoomCode, roomCode } from '../domain/codes'
 import { DomainError, forbidden, notFound, validation } from '../domain/errors'
@@ -19,7 +21,7 @@ import { generateGrid, initialChecked, toggle } from '../domain/grid'
 import { cleanName, isNameTaken } from '../domain/names'
 import type { Random } from '../domain/random'
 import {
-	announcementText,
+	announcementFeed,
 	evaluateProgress,
 	isClosed,
 	maxPlayers,
@@ -85,28 +87,27 @@ export class RoomService {
 		const solo = request.mode === 'solo'
 		const name = cleanText(request.name)
 		if (name.length < LIMITS.roomNameMin || name.length > LIMITS.roomNameMax) {
-			throw validation(
-				`Le nom du salon doit faire entre ${LIMITS.roomNameMin} et ${LIMITS.roomNameMax} caractères.`,
-			)
+			throw validation('roomNameLength', { min: LIMITS.roomNameMin, max: LIMITS.roomNameMax })
 		}
-		if (!isGridSize(request.gridSize)) throw validation('Taille de grille invalide.')
+		if (!isGridSize(request.gridSize)) throw validation('gridSizeInvalid')
 		const password = solo ? null : request.password || null
 		if (
 			password !== null &&
 			(password.length < LIMITS.passwordMin || password.length > LIMITS.passwordMax)
 		) {
-			throw validation(
-				`Le mot de passe doit faire entre ${LIMITS.passwordMin} et ${LIMITS.passwordMax} caractères.`,
-			)
+			throw validation('passwordLength', { min: LIMITS.passwordMin, max: LIMITS.passwordMax })
 		}
 		const dictionary = await dictionaries.findByCode(request.dictionaryCode)
-		if (!dictionary) throw notFound('Ce dictionnaire n’existe pas.')
+		if (!dictionary) throw notFound('dictionaryNotFound')
 		const freeCenter = request.freeCenter && hasCenter(request.gridSize)
 		const needed = entriesNeeded(request.gridSize, freeCenter)
 		if (dictionary.entries.length < needed) {
-			throw validation(
-				`« ${dictionary.title} » a ${dictionary.entries.length} expressions : il en faut ${needed} pour une grille ${request.gridSize}×${request.gridSize}.`,
-			)
+			throw validation('dictionaryTooSmall', {
+				title: dictionary.title,
+				count: dictionary.entries.length,
+				needed,
+				size: request.gridSize,
+			})
 		}
 
 		const ownerName = cleanName(request.ownerName) ?? (await this.funnyName([], dictionary.id))
@@ -120,7 +121,12 @@ export class RoomService {
 			mode: request.mode,
 			visibility: solo ? 'unlisted' : request.visibility,
 			passwordHash: password ? await passwords.hash(password) : null,
-			dictionary: { id: dictionary.id, code: dictionary.code, title: dictionary.title },
+			dictionary: {
+				id: dictionary.id,
+				code: dictionary.code,
+				title: dictionary.title,
+				language: dictionary.language,
+			},
 			gridSize: request.gridSize,
 			freeCenter,
 			ownerId: null,
@@ -138,12 +144,9 @@ export class RoomService {
 		room.ownerId = participant.id
 		await rooms.create(room, participant)
 		await rooms.addMessage(
-			this.systemMessage(
-				room.id,
-				solo
-					? `Partie solo lancée avec « ${dictionary.title} ». Bonne chance ${ownerName} !`
-					: `${ownerName} a créé le salon. Partagez le lien pour inviter du monde !`,
-			),
+			solo
+				? this.systemMessage(room.id, 'soloStarted', { name: ownerName, title: dictionary.title })
+				: this.systemMessage(room.id, 'roomCreated', { name: ownerName }),
 		)
 		return membership(room, participant, token)
 	}
@@ -159,20 +162,20 @@ export class RoomService {
 		}
 	}
 
-	async listPublic(): Promise<RoomSummary[]> {
-		const rows = await this.deps.rooms.listOpenPublic(PUBLIC_LIST_LIMIT)
+	async listPublic(language?: LanguageCode): Promise<RoomSummary[]> {
+		const rows = await this.deps.rooms.listOpenPublic(PUBLIC_LIST_LIMIT, language)
 		return rows.map((row) => roomSummary(row.room, row.players, row.spectators))
 	}
 
 	async join(rawCode: string, request: JoinRoomRequest): Promise<Membership> {
 		const { rooms, dictionaries, passwords, realtime } = this.deps
 		const room = await this.findRoom(rawCode)
-		if (isClosed(room)) throw new DomainError('room-closed', 'Ce salon est fermé.')
+		if (isClosed(room)) throw new DomainError('room-closed', 'roomClosed')
 		if (room.mode === 'solo') {
-			throw new DomainError('solo-room', 'C’est une partie solo : impossible de la rejoindre.')
+			throw new DomainError('solo-room', 'soloRoom')
 		}
 		if (room.passwordHash && !(await passwords.verify(request.password ?? '', room.passwordHash))) {
-			throw new DomainError('wrong-password', 'Mot de passe incorrect.')
+			throw new DomainError('wrong-password', 'wrongPassword')
 		}
 		const wanted = cleanName(request.name)
 
@@ -182,20 +185,17 @@ export class RoomService {
 			const sameRole = participants.filter((p) => p.role === role).length
 			const capacity = role === 'player' ? maxPlayers(room) : LIMITS.maxSpectatorsPerRoom
 			if (sameRole >= capacity) {
-				throw new DomainError(
-					'room-full',
-					role === 'player'
-						? `Le salon est complet (${capacity} joueurs). Vous pouvez regarder en spectateur.`
-						: 'Il n’y a plus de place pour les spectateurs.',
-				)
+				throw role === 'player'
+					? new DomainError('room-full', 'roomFullPlayers', { max: capacity })
+					: new DomainError('room-full', 'roomFullSpectators')
 			}
 			const takenNames = participants.map((p) => p.name)
 			if (wanted && isNameTaken(wanted, takenNames)) {
-				throw validation('Ce pseudo est déjà pris dans ce salon.')
+				throw validation('nameTaken')
 			}
 			const name = wanted ?? (await this.funnyName(takenNames, room.dictionary.id))
 			const dictionary = await dictionaries.findById(room.dictionary.id)
-			if (!dictionary) throw notFound('Le dictionnaire de ce salon a disparu.')
+			if (!dictionary) throw notFound('dictionaryGone')
 
 			const { participant, token } = this.newParticipant(
 				room,
@@ -210,10 +210,9 @@ export class RoomService {
 				participant: participantView(participant, room, false),
 			})
 			await this.postMessage(
-				this.systemMessage(
-					room.id,
-					role === 'player' ? `👋 ${name} rejoint la partie.` : `👀 ${name} regarde en spectateur.`,
-				),
+				this.systemMessage(room.id, role === 'player' ? 'playerJoined' : 'spectatorJoined', {
+					name,
+				}),
 			)
 			await this.touch(room)
 			return membership(room, participant, token)
@@ -225,12 +224,12 @@ export class RoomService {
 	async authenticate(rawCode: string, token: string): Promise<Session> {
 		const { rooms, tokens } = this.deps
 		const participant = await rooms.findParticipantByTokenHash(tokens.hash(token))
-		if (!participant) throw new DomainError('unauthorized', 'Accès refusé à ce salon.')
+		if (!participant) throw new DomainError('unauthorized', 'accessDenied')
 		const room = await rooms.findById(participant.roomId)
 		if (!room || room.code !== normalizeRoomCode(rawCode)) {
-			throw new DomainError('unauthorized', 'Accès refusé à ce salon.')
+			throw new DomainError('unauthorized', 'accessDenied')
 		}
-		if (isClosed(room)) throw new DomainError('room-closed', 'Ce salon est fermé.')
+		if (isClosed(room)) throw new DomainError('room-closed', 'roomClosed')
 		return { roomId: room.id, participantId: participant.id }
 	}
 
@@ -279,7 +278,7 @@ export class RoomService {
 			const room = await this.openRoom(session.roomId)
 			const participant = await this.participantOf(session)
 			if (participant.role !== 'player' || !participant.cells) {
-				throw forbidden('Les spectateurs ne peuvent pas cocher de case.')
+				throw forbidden('spectatorCannotPlay')
 			}
 			const checked = toggle(participant.cells, participant.checked, cell)
 			const change = evaluateProgress(participant, room.gridSize, checked)
@@ -315,7 +314,7 @@ export class RoomService {
 					},
 				})
 				await this.postMessage({
-					...this.systemMessage(room.id, announcementText(updated.name, kind, lineCount, rank)),
+					...this.feedMessage(room.id, announcementFeed(updated.name, kind, lineCount, rank)),
 					kind: 'announce',
 					authorId: updated.id,
 					authorName: updated.name,
@@ -330,7 +329,7 @@ export class RoomService {
 		const text = cleanText(rawText)
 		if (!text) return
 		if (text.length > LIMITS.chatMessageMax) {
-			throw validation(`Un message fait au plus ${LIMITS.chatMessageMax} caractères.`)
+			throw validation('chatTooLong', { max: LIMITS.chatMessageMax })
 		}
 		this.checkChatRate(session.participantId)
 		const room = await this.openRoom(session.roomId)
@@ -341,6 +340,8 @@ export class RoomService {
 			authorId: participant.id,
 			authorName: participant.name,
 			text,
+			key: null,
+			params: null,
 			announcement: null,
 			createdAt: this.deps.clock.now(),
 		})
@@ -352,12 +353,12 @@ export class RoomService {
 		await this.mutex.run(session.roomId, async () => {
 			const room = await this.openRoom(session.roomId)
 			if (room.ownerId !== session.participantId) {
-				throw forbidden('Seul l’hôte du salon peut exclure quelqu’un.')
+				throw forbidden('ownerOnlyKick')
 			}
-			if (targetId === session.participantId) throw validation('Vous ne pouvez pas vous exclure.')
+			if (targetId === session.participantId) throw validation('cannotKickSelf')
 			const participants = await rooms.listParticipants(room.id)
 			const target = participants.find((p) => p.id === targetId)
-			if (!target) throw notFound('Cette personne n’est plus dans le salon.')
+			if (!target) throw notFound('participantGone')
 			await rooms.removeParticipant(target.id)
 			realtime.broadcast(room.id, {
 				type: 'participant:left',
@@ -365,7 +366,7 @@ export class RoomService {
 				reason: 'kicked',
 			})
 			realtime.disconnect(target.id, CLOSE_CODES.kicked, { type: 'kicked' })
-			await this.postMessage(this.systemMessage(room.id, `🚪 ${target.name} a été exclu du salon.`))
+			await this.postMessage(this.systemMessage(room.id, 'kicked', { name: target.name }))
 		})
 	}
 
@@ -386,16 +387,14 @@ export class RoomService {
 				participantId: participant.id,
 				reason: 'left',
 			})
-			await this.postMessage(this.systemMessage(room.id, `${participant.name} a quitté le salon.`))
+			await this.postMessage(this.systemMessage(room.id, 'left', { name: participant.name }))
 			if (room.ownerId === participant.id) {
 				const heir = remaining.find((p) => p.role === 'player') ?? remaining[0]
 				if (!heir) return
 				const updated = { ...room, ownerId: heir.id }
 				await rooms.update(updated)
 				realtime.broadcast(room.id, { type: 'room:updated', room: roomView(updated) })
-				await this.postMessage(
-					this.systemMessage(room.id, `👑 ${heir.name} est maintenant l’hôte du salon.`),
-				)
+				await this.postMessage(this.systemMessage(room.id, 'newOwner', { name: heir.name }))
 			}
 		})
 	}
@@ -469,37 +468,44 @@ export class RoomService {
 
 	private async findRoom(rawCode: string): Promise<Room> {
 		const room = await this.deps.rooms.findByCode(normalizeRoomCode(rawCode))
-		if (!room) throw notFound('Ce salon n’existe pas.')
+		if (!room) throw notFound('roomNotFound')
 		return room
 	}
 
 	private async roomById(id: string): Promise<Room> {
 		const room = await this.deps.rooms.findById(id)
-		if (!room) throw notFound('Ce salon n’existe pas.')
+		if (!room) throw notFound('roomNotFound')
 		return room
 	}
 
 	private async openRoom(id: string): Promise<Room> {
 		const room = await this.roomById(id)
-		if (isClosed(room)) throw new DomainError('room-closed', 'Ce salon est fermé.')
+		if (isClosed(room)) throw new DomainError('room-closed', 'roomClosed')
 		return room
 	}
 
 	private async participantOf(session: Session): Promise<Participant> {
 		const participant = await this.deps.rooms.findParticipant(session.participantId)
 		if (!participant || participant.roomId !== session.roomId) {
-			throw new DomainError('unauthorized', 'Vous ne faites plus partie de ce salon.')
+			throw new DomainError('unauthorized', 'notInRoom')
 		}
 		return participant
 	}
 
-	private systemMessage(roomId: string, text: string): NewMessage {
+	/** Message of the room itself: a key every client translates (`feed.<key>`). */
+	private systemMessage(roomId: string, key: string, params: TextParams = {}): NewMessage {
+		return this.feedMessage(roomId, { key, params })
+	}
+
+	private feedMessage(roomId: string, text: { key: string; params: TextParams }): NewMessage {
 		return {
 			roomId,
 			kind: 'system',
 			authorId: null,
 			authorName: null,
-			text,
+			text: '',
+			key: text.key,
+			params: text.params,
 			announcement: null,
 			createdAt: this.deps.clock.now(),
 		}
@@ -528,10 +534,7 @@ export class RoomService {
 			(t) => now - t < CHAT_WINDOW_MS,
 		)
 		if (recent.length >= CHAT_MAX_PER_WINDOW) {
-			throw new DomainError(
-				'rate-limited',
-				'Doucement ! Attendez quelques secondes avant d’écrire.',
-			)
+			throw new DomainError('rate-limited', 'chatRateLimited')
 		}
 		recent.push(now)
 		this.chatHistory.set(participantId, recent)

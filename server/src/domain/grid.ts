@@ -4,8 +4,6 @@ import { type Random, shuffle } from './random'
 
 export type GridCell = GridCellView
 
-export const DEFAULT_FREE_SPACE = 'Case gratuite ⭐'
-
 export interface GridSpec {
 	size: number
 	freeCenter: boolean
@@ -32,14 +30,13 @@ export function generateGrid(
 ): GridCell[] {
 	const needed = entriesNeeded(spec.size, spec.freeCenter)
 	if (entries.length < needed) {
-		throw validation(
-			`Ce dictionnaire a ${entries.length} expressions, il en faut ${needed} pour une grille ${spec.size}×${spec.size}.`,
-		)
+		throw validation('gridNotEnoughEntries', { count: entries.length, needed, size: spec.size })
 	}
 	const drawn = shuffle(entries, random).slice(0, needed)
 	const cells: GridCell[] = drawn.map((text) => ({ text, free: false }))
 	if (usesFreeCenter(spec)) {
-		cells.splice(centerOf(spec.size), 0, { text: spec.freeSpace ?? DEFAULT_FREE_SPACE, free: true })
+		// Empty text = no label in the dictionary: the client shows its translated default.
+		cells.splice(centerOf(spec.size), 0, { text: spec.freeSpace ?? '', free: true })
 	}
 	return cells
 }
@@ -56,7 +53,7 @@ export function toggle(
 	cell: number,
 ): number[] {
 	if (!Number.isInteger(cell) || cell < 0 || cell >= cells.length) {
-		throw validation('Cette case n’existe pas.')
+		throw validation('cellNotFound')
 	}
 	if (cells[cell]?.free) return [...checked]
 	const set = new Set(checked)

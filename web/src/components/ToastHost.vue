@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { useToasts } from '../composables/useToasts'
+import { useI18n } from '../i18n/useI18n'
 import AppIcon from './ui/AppIcon.vue'
 
 const { toasts, dismiss } = useToasts()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -11,7 +13,7 @@ const { toasts, dismiss } = useToasts()
 			<div v-for="toast in toasts" :key="toast.id" class="toast" :class="`toast--${toast.tone}`">
 				<span>{{ toast.text }}</span>
 				<button type="button" class="toast__close" @click="dismiss(toast.id)">
-					<AppIcon name="x" :size="16" label="Fermer la notification" />
+					<AppIcon name="x" :size="16" :label="t('toast.close')" />
 				</button>
 			</div>
 		</TransitionGroup>

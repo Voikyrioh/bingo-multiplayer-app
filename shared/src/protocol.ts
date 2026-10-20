@@ -3,7 +3,15 @@
  * WebSocket messages of a room. Any change here is a protocol change.
  */
 
+import type { LanguageCode } from './languages'
+
 export type RoomMode = 'multi' | 'solo'
+
+/**
+ * Text the server cannot word itself: the client translates `key` (in the
+ * namespace of its use: errors, feed...) with `params` in the viewer's language.
+ */
+export type TextParams = Record<string, string | number>
 export type RoomVisibility = 'public' | 'unlisted'
 export type ParticipantRole = 'player' | 'spectator'
 
@@ -11,6 +19,8 @@ export type ParticipantRole = 'player' | 'spectator'
 
 export interface DictionarySummary {
 	code: string
+	/** Language the expressions are written in (never translated). */
+	language: LanguageCode
 	title: string
 	description: string
 	entryCount: number
@@ -24,6 +34,7 @@ export interface DictionaryView extends DictionarySummary {
 }
 
 export interface CreateDictionaryRequest {
+	language: LanguageCode
 	title: string
 	description?: string
 	entries: string[]
@@ -35,6 +46,8 @@ export interface RoomSummary {
 	code: string
 	name: string
 	dictionaryTitle: string
+	/** Language of the dictionary played in the room. */
+	language: LanguageCode
 	gridSize: number
 	hasPassword: boolean
 	players: number
@@ -78,7 +91,9 @@ export interface Membership {
 
 export interface ApiError {
 	code: string
-	message: string
+	/** Translation key, in the `error.` namespace of the client. */
+	key: string
+	params?: TextParams
 }
 
 // ---------- Views shared by REST and WebSocket ----------
@@ -111,7 +126,7 @@ export interface RoomView {
 	gridSize: number
 	freeCenter: boolean
 	ownerId: string | null
-	dictionary: { code: string; title: string }
+	dictionary: { code: string; title: string; language: LanguageCode }
 	createdAt: string
 	maxPlayers: number
 }
@@ -125,7 +140,11 @@ export interface MessageView {
 	kind: MessageKind
 	authorId: string | null
 	authorName: string | null
+	/** Chat message as typed. Empty for system messages, which carry a key instead. */
 	text: string
+	/** System and announce messages: translation key (`feed.` namespace) and its params. */
+	key?: string
+	params?: TextParams
 	createdAt: string
 	/** Only for kind = announce. */
 	announcement?: AnnouncementKind
@@ -178,7 +197,7 @@ export type ServerMessage =
 	| { type: 'message'; message: MessageView }
 	| { type: 'announce'; announcement: Announcement }
 	| { type: 'kicked' }
-	| { type: 'error'; code: string; message: string }
+	| { type: 'error'; code: string; key: string; params?: TextParams }
 	| { type: 'pong' }
 
 /** WebSocket close codes (4000-4999 are free for applications). */

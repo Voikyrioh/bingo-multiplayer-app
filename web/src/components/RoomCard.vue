@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import type { RoomSummary } from '@bingo/shared'
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from '../i18n/useI18n'
 import { timeAgo } from '../lib/format'
 import AppIcon from './ui/AppIcon.vue'
 
-defineProps<{ room: RoomSummary }>()
+const props = defineProps<{ room: RoomSummary }>()
+const { t, tc, locale, languageName: nameOf } = useI18n()
+const languageName = computed(() => nameOf(props.room.language))
 </script>
 
 <template>
@@ -12,16 +16,33 @@ defineProps<{ room: RoomSummary }>()
 		<RouterLink :to="`/r/${room.code}`" class="room__link">
 			<span class="room__top">
 				<span class="room__name">{{ room.name }}</span>
-				<span v-if="room.hasPassword" class="room__lock" title="Mot de passe requis">
-					<AppIcon name="lock" :size="16" label="Mot de passe requis" />
+				<span class="room__badges">
+					<span class="room__lang" :title="languageName" :lang="room.language">
+						<span aria-hidden="true">{{ room.language }}</span>
+						<span class="visually-hidden">{{ t('rooms.language', { language: languageName }) }}</span>
+					</span>
+					<span v-if="room.hasPassword" class="room__lock" :title="t('rooms.passwordRequired')">
+						<AppIcon name="lock" :size="16" :label="t('rooms.passwordRequired')" />
+					</span>
 				</span>
 			</span>
-			<span class="room__dict"><AppIcon name="book" :size="16" /> {{ room.dictionaryTitle }}</span>
+			<span class="room__dict" :lang="room.language"><AppIcon name="book" :size="16" /> {{ room.dictionaryTitle }}</span>
 			<span class="room__meta">
-				<span class="room__chip"><AppIcon name="users" :size="16" /> {{ room.players }}/{{ room.maxPlayers }}</span>
-				<span v-if="room.spectators" class="room__chip"><AppIcon name="eye" :size="16" /> {{ room.spectators }}</span>
-				<span class="room__chip">{{ room.gridSize }}×{{ room.gridSize }}</span>
-				<span class="room__ago">{{ timeAgo(room.lastActivityAt) }}</span>
+				<span class="room__chip" :title="tc('rooms.players', room.players, { max: room.maxPlayers })">
+					<AppIcon name="users" :size="16" />
+					<span aria-hidden="true">{{ room.players }}/{{ room.maxPlayers }}</span>
+					<span class="visually-hidden">{{ tc('rooms.players', room.players, { max: room.maxPlayers }) }}</span>
+				</span>
+				<span v-if="room.spectators" class="room__chip" :title="tc('rooms.spectators', room.spectators)">
+					<AppIcon name="eye" :size="16" />
+					<span aria-hidden="true">{{ room.spectators }}</span>
+					<span class="visually-hidden">{{ tc('rooms.spectators', room.spectators) }}</span>
+				</span>
+				<span class="room__chip">
+					<span aria-hidden="true">{{ room.gridSize }}×{{ room.gridSize }}</span>
+					<span class="visually-hidden">{{ t('rooms.gridSize', { size: room.gridSize }) }}</span>
+				</span>
+				<span class="room__ago">{{ timeAgo(room.lastActivityAt, locale) }}</span>
 			</span>
 		</RouterLink>
 	</li>
@@ -62,6 +83,25 @@ defineProps<{ room: RoomSummary }>()
 	font-weight: 600;
 	font-size: 1.2rem;
 	overflow-wrap: anywhere;
+}
+.room__badges {
+	flex: none;
+	display: flex;
+	gap: 6px;
+}
+.room__lang {
+	display: grid;
+	place-items: center;
+	min-width: 34px;
+	height: 30px;
+	padding: 0 6px;
+	border: 2px solid var(--line);
+	border-radius: 8px;
+	background: var(--sky-soft);
+	font-family: var(--font-display);
+	font-weight: 600;
+	font-size: 0.8rem;
+	text-transform: uppercase;
 }
 .room__lock {
 	flex: none;

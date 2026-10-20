@@ -19,6 +19,10 @@ Production : <https://bingo.voikyrioh.fr> (fiche infra `apps/bingo.yml` du repo 
   au joueur suivant.
 - **Mode solo** : on joue seul, et on peut partager son dictionnaire (`/d/<code>`).
 - **Spectateurs** (mot de passe exigé s'il y en a un).
+- **24 langues européennes** pour l'interface (choix mémorisé, sinon langue du navigateur),
+  textes adaptés à chaque langue plutôt que traduits mot à mot. Les dictionnaires ne sont
+  jamais traduits : chacun porte sa langue, et les listes de salons et de dictionnaires se
+  filtrent par langue.
 - Fermeture automatique : salon sans activité depuis **2 jours**, ou sans personne de connecté
   depuis 15 min (marge pour les rechargements et les redéploiements). Purge 7 jours après.
 
@@ -30,6 +34,8 @@ Production : <https://bingo.voikyrioh.fr> (fiche infra `apps/bingo.yml` du repo 
 | Base | **PostgreSQL** via `pg` (SQL écrit à la main) | ressource partagée déjà provisionnée par l'infra |
 | Validation | `zod` | entrées HTTP, messages WebSocket, configuration |
 | Front | **Vue 3.5** + `vue-router`, Vite | aucun design system : tous les composants sont faits main |
+| Traductions | `@Voikyrioh/vue-translate` (GitHub Packages, privé) | paquet maison ; pluriels via `Intl.PluralRules`, dates via `Intl` |
+| Observabilité | `@Voikyrioh/observability` (GitHub Packages, privé) | logs pino JSON avec traceId, traces OpenTelemetry vers SigNoz (HTTP, WebSocket, Postgres) |
 | Polices | `@fontsource-variable/fredoka`, `nunito` | servies en local (CSP stricte, pas de Google Fonts) |
 | Tests | Vitest, `@vue/test-utils`, `happy-dom` | un seul lanceur pour serveur, front et code partagé |
 | Lint/format | Biome | même outil que les autres projets |
@@ -47,7 +53,11 @@ web/      client Vue
 
 ## Développement
 
+`@Voikyrioh/vue-translate` et `@Voikyrioh/observability` viennent de GitHub Packages
+(privé) : `.npmrc` lit un jeton `read:packages` dans `GITHUB_TOKEN`.
+
 ```bash
+export GITHUB_TOKEN=ghp_xxx                       # PAT classic, scope read:packages
 npm install
 docker compose -f compose.dev.yml up -d          # Postgres local (facultatif)
 
@@ -80,7 +90,44 @@ Validées au démarrage par `server/src/config.ts`. Exemple : `.env.example`.
 | `PUBLIC_ORIGIN` | `https://bingo.voikyrioh.fr`, obligatoire en production (origine autorisée des WebSockets, CSP) |
 | `STATIC_DIR` | client buildé à servir (`/app/public` dans l'image) |
 | `MIGRATIONS_DIR` | dossier des migrations SQL (`/app/migrations` dans l'image) |
-| `LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+| `LOG_LEVEL` | `debug`, `info`, `warn`, `error` (lu par le logger pino) |
+| `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT` | traces vers SigNoz (production : `bingo`, `http://signoz-otel-collector:4318`) |
+| `OTEL_SDK_DISABLED` | `true` pour couper OpenTelemetry (défaut de `npm run dev` et des tests) |
+
+## Langues
+
+- **Interface** : un fichier par langue dans `web/public/locales/<locale>` (JSON plat, sans
+  extension, chargé par `vue-translate` à l'adresse `/locales/<locale>`). La référence est
+  `fr-FR` ; la liste des langues est dans `shared/src/languages.ts`.
+- **Serveur** : il n'envoie jamais de phrase. Les erreurs (`{ code, key, params }`) et les
+  messages du fil (arrivées, départs, annonces : `key` + `params`) sont traduits par chaque
+  client dans sa langue (`error.<key>`, `feed.<key>`).
+- **Pluriels** : clés `.one`, `.few`, `.many`, `.other`… choisies avec `Intl.PluralRules`
+  (`useI18n().tc`). Chaque langue fournit les formes dont elle a besoin.
+- **Dictionnaires** : jamais traduits. Chacun a une langue (`language`, choisie à la
+  création) ; `GET /api/dictionaries?language=de` et `GET /api/rooms?language=de` filtrent.
+- **Contrôles** (tests du front) : chaque fichier a les clés du français, les mêmes
+  variables `{…}`, les formes de pluriel de sa langue ; chaque clé utilisée par le code, et
+  chaque clé envoyée par le serveur, existe.
+
+Ajouter une langue : l'ajouter à `LANGUAGES` (`shared/src/languages.ts`), créer
+`web/public/locales/<locale>` à partir de `fr-FR`, puis `npm test -w web`. Modifier un texte :
+modifier `fr-FR` puis la même clé dans les autres langues.
+
+## Observabilité
+
+`@Voikyrioh/observability`, comme les autres APIs : l'image démarre avec
+`node --import @Voikyrioh/observability/register` (OpenTelemetry chargé avant le bundle,
+pour instrumenter `pg`). Dans SigNoz, service `bingo` :
+
+- un span par requête HTTP (`otelHono`, nommé d'après la route : `GET /api/rooms/:code`) ;
+- un span par message WebSocket (`WS toggle`, `WS chat`, `WS kick`…), erreurs métier en
+  attributs (`bingo.error.code`), exceptions enregistrées ;
+- les requêtes Postgres en enfants.
+
+Logs : pino, JSON sur stdout en production (collectés par Fluent Bit), lisibles en
+couleur en développement ; chaque ligne écrite pendant une requête ou un message porte son
+`traceId`. Pas d'adresse IP, de jeton ni de mot de passe dans les logs ni dans les spans.
 
 ## Base de données
 
@@ -101,6 +148,12 @@ L'image est construite par le `Dockerfile` à la racine, via les workflows parta
 | `deploy.yml` (manuel) | `deploy-app.yml` | image `ghcr.io/voikyrioh/bingo:<sha>` + `latest`, `.env` depuis Vault, `docker compose up` sur le serveur |
 | `release.yml` (manuel) | `ci-release.yml` | tag `vX.Y.Z`, image `ghcr.io/voikyrioh/bingo:vX.Y.Z` + `latest`, release GitHub |
 
+0. Accès aux paquets privés `@Voikyrioh/vue-translate` (+ sa dépendance
+   `@Voikyrioh/observable`) et `@Voikyrioh/observability`, au choix :
+   - GitHub → chaque paquet → *Package settings* → *Manage Actions access* → ajouter
+     `bingo-multiplayer-app` (lecture) : le jeton automatique des workflows suffit ;
+   - ou un secret de dépôt `NPM_TOKEN` (PAT classic `read:packages`), prioritaire s'il existe.
+   Sans l'un des deux, `npm ci` échoue en 401/403 dans la CI et dans le build de l'image.
 1. Infra (une fois) : fiche `apps/bingo.yml` du repo `infra-as-code`, `tofu apply` pour le DNS,
    puis workflow `provision-app.yml` (`app_name=bingo`) : base Postgres, secrets Vault,
    compose Traefik et secrets GitHub de ce repo. Détail : runbook `docs/runbooks/mettre-en-ligne-bingo.md`

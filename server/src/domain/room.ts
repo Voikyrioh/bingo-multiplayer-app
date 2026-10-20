@@ -1,5 +1,6 @@
 import {
 	type AnnouncementKind,
+	type LanguageCode,
 	LIMITS,
 	lineKind,
 	type MessageKind,
@@ -7,6 +8,7 @@ import {
 	progressOf,
 	type RoomMode,
 	type RoomVisibility,
+	type TextParams,
 } from '@bingo/shared'
 import type { GridCell } from './grid'
 
@@ -17,7 +19,7 @@ export interface Room {
 	mode: RoomMode
 	visibility: RoomVisibility
 	passwordHash: string | null
-	dictionary: { id: string; code: string; title: string }
+	dictionary: { id: string; code: string; title: string; language: LanguageCode }
 	gridSize: number
 	freeCenter: boolean
 	ownerId: string | null
@@ -47,7 +49,11 @@ export interface Message {
 	kind: MessageKind
 	authorId: string | null
 	authorName: string | null
+	/** Chat text as typed; empty for system and announce messages. */
 	text: string
+	/** System and announce messages: translated by each client (`feed.<key>`). */
+	key: string | null
+	params: TextParams | null
 	announcement: AnnouncementKind | null
 	createdAt: Date
 }
@@ -102,17 +108,18 @@ export function evaluateProgress(
 	}
 }
 
-export function announcementText(
+/**
+ * Feed entry of an announcement. The server never words it: every viewer
+ * reads it in their own language (`feed.announce.<kind>` on the client).
+ */
+export function announcementFeed(
 	name: string,
 	kind: AnnouncementKind,
 	lineCount: number,
 	rank?: number,
-): string {
-	if (kind === 'full') {
-		const place = rank === 1 ? '1er carton plein du salon !' : `carton plein n°${rank ?? '?'}`
-		return `🏆 ${name} a rempli toute sa grille : ${place}`
+): { key: string; params: TextParams } {
+	return {
+		key: `announce.${kind}`,
+		params: { name, lineCount, ...(rank ? { rank } : {}) },
 	}
-	const total = lineCount > 1 ? ` (${lineCount} lignes au total)` : ''
-	if (kind === 'diagonal') return `↘️ ${name} a complété une diagonale !${total}`
-	return `🎯 ${name} a complété une ligne !${total}`
 }

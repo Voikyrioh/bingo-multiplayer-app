@@ -1,24 +1,26 @@
 <script setup lang="ts">
 import type { Announcement } from '@bingo/shared'
 import { computed } from 'vue'
+import { useI18n } from '../i18n/useI18n'
 
 // Big banner for the announcement in progress. The live region is always in
 // the DOM so that screen readers announce each new text.
 const props = defineProps<{ current: (Announcement & { mine: boolean }) | null }>()
+const { t } = useI18n()
 
+// "You" and "Bob" sentences are separate keys: many languages conjugate differently.
 const text = computed(() => {
 	const a = props.current
 	if (!a) return ''
-	const who = a.mine ? 'Vous avez' : `${a.name} a`
-	if (a.kind === 'full') return `${who} rempli toute la grille !`
-	if (a.kind === 'diagonal') return `${who} complété une diagonale !`
-	return `${who} complété une ligne !`
+	return t(`banner.${a.kind}.${a.mine ? 'me' : 'someone'}`, { name: a.name })
 })
 const title = computed(() => {
 	const a = props.current
 	if (!a) return ''
-	if (a.kind === 'full') return a.rank === 1 ? 'CARTON PLEIN !' : `CARTON PLEIN n°${a.rank ?? ''}`
-	return 'BINGO !'
+	if (a.kind === 'full') {
+		return a.rank && a.rank > 1 ? t('banner.fullTitleNth', { rank: a.rank }) : t('banner.fullTitle')
+	}
+	return t('banner.bingo')
 })
 </script>
 

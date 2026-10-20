@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import AppButton from '../components/ui/AppButton.vue'
+import { useI18n } from '../i18n/useI18n'
+import { usePageTitle } from '../i18n/usePageTitle'
+
+const { t } = useI18n()
+usePageTitle(() => t('notFound.tabTitle'))
 </script>
 
 <template>
 	<div class="container lost">
 		<p class="lost__emoji" aria-hidden="true">🙈</p>
-		<h1>Cette case n’est pas sur la grille</h1>
-		<p class="muted">La page demandée n’existe pas (ou plus).</p>
-		<AppButton to="/" icon="arrowLeft">Retour à l’accueil</AppButton>
+		<h1>{{ t('notFound.title') }}</h1>
+		<p class="muted">{{ t('notFound.text') }}</p>
+		<AppButton to="/" icon="arrowLeft">{{ t('notFound.home') }}</AppButton>
 	</div>
 </template>
 

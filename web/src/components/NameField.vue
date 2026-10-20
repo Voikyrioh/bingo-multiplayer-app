@@ -2,6 +2,7 @@
 import { LIMITS } from '@bingo/shared'
 import { ref } from 'vue'
 import { api } from '../api/http'
+import { useI18n } from '../i18n/useI18n'
 import AppField from './ui/AppField.vue'
 import AppIcon from './ui/AppIcon.vue'
 
@@ -9,6 +10,7 @@ import AppIcon from './ui/AppIcon.vue'
 // `room` or `dictionary` themes the names (e.g. the speech has its own list).
 const model = defineModel<string>({ default: '' })
 const props = defineProps<{ error?: string | null; room?: string; dictionary?: string }>()
+const { t } = useI18n()
 const rolling = ref(false)
 
 async function roll() {
@@ -26,16 +28,16 @@ async function roll() {
 <template>
 	<AppField
 		v-model="model"
-		label="Votre pseudo"
+		:label="t('name.label')"
 		:maxlength="LIMITS.nameMax"
-		placeholder="Laissez vide pour un nom surprise"
-		hint="Pas d’idée ? Lancez le dé !"
+		:placeholder="t('name.placeholder')"
+		:hint="t('name.hint')"
 		autocomplete="nickname"
 		:error="error"
 	>
 		<template #action>
 			<button type="button" class="dice" :class="{ 'dice--rolling': rolling }" @click="roll">
-				<AppIcon name="dice" :size="24" label="Tirer un nom marrant au hasard" />
+				<AppIcon name="dice" :size="24" :label="t('name.roll')" />
 			</button>
 		</template>
 	</AppField>

@@ -1,3 +1,4 @@
+import { otelHono } from '@Voikyrioh/observability'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { Hono } from 'hono'
@@ -28,6 +29,9 @@ export function createApp(deps: AppDeps) {
 	const app = new Hono()
 	const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
+	// First middleware: one server span per request (SigNoz), with the route
+	// pattern as name (GET /api/rooms/:code). Logs written meanwhile carry its traceId.
+	app.use(otelHono())
 	app.onError(onError)
 	app.notFound((c) =>
 		c.req.path.startsWith('/api/') ? onNotFound(c) : c.text('Page introuvable', 404),
@@ -38,7 +42,7 @@ export function createApp(deps: AppDeps) {
 		async (c, next) => {
 			const origin = c.req.header('origin')
 			if (deps.publicOrigin && origin !== deps.publicOrigin) {
-				return c.json(errorBody('forbidden', 'Origine refusée.'), 403)
+				return c.json(errorBody('forbidden', 'originRefused'), 403)
 			}
 			await next()
 		},
@@ -81,6 +85,10 @@ export function createApp(deps: AppDeps) {
 					"frame-ancestors 'none'",
 				].join('; '),
 			)
+			// Translation files have no extension (vue-translate fetches /locales/<locale>).
+			if (c.req.path.startsWith('/locales/') && c.res.ok) {
+				c.header('Content-Type', 'application/json; charset=utf-8')
+			}
 			c.header('Referrer-Policy', 'no-referrer')
 			c.header('X-Content-Type-Options', 'nosniff')
 			c.header(

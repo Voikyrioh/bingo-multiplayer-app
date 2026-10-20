@@ -1,4 +1,4 @@
-import type { CloseReason, ServerMessage } from '@bingo/shared'
+import type { CloseReason, LanguageCode, ServerMessage } from '@bingo/shared'
 import type { Dictionary } from '../domain/dictionary'
 import type { Message, NewMessage, Participant, Room } from '../domain/room'
 
@@ -11,8 +11,8 @@ export interface DictionaryRepository {
 	create(dictionary: Dictionary): Promise<void>
 	findByCode(code: string): Promise<Dictionary | null>
 	findById(id: string): Promise<Dictionary | null>
-	/** Featured first, then the newest public ones. */
-	listListed(limit: number): Promise<Dictionary[]>
+	/** Featured first, then the newest public ones; only one language if given. */
+	listListed(limit: number, language?: LanguageCode): Promise<Dictionary[]>
 }
 
 export interface NameRepository {
@@ -36,7 +36,8 @@ export interface RoomRepository {
 	findById(id: string): Promise<Room | null>
 	/** Saves name, owner, activity and closing date. */
 	update(room: Room): Promise<void>
-	listOpenPublic(limit: number): Promise<OpenRoomRow[]>
+	/** Open public multiplayer rooms; only those playing a dictionary of `language` if given. */
+	listOpenPublic(limit: number, language?: LanguageCode): Promise<OpenRoomRow[]>
 	listOpen(): Promise<Room[]>
 	countParticipants(roomId: string): Promise<{ players: number; spectators: number }>
 	/** Deletes rooms closed before this date, with their participants and messages. */

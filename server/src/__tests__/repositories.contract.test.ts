@@ -41,7 +41,12 @@ function makeRoom(overrides: Partial<Room> = {}): Room {
 		mode: 'multi',
 		visibility: 'public',
 		passwordHash: null,
-		dictionary: { id: macron.id, code: macron.code, title: macron.title },
+		dictionary: {
+			id: macron.id,
+			code: macron.code,
+			title: macron.title,
+			language: macron.language,
+		},
 		gridSize: 3,
 		freeCenter: true,
 		ownerId: null,
@@ -88,6 +93,7 @@ function contract(name: string, factory: () => Promise<Repos>, options: { skip?:
 			await repos.dictionaries.create({
 				id,
 				code: `dict-${n}`,
+				language: 'de',
 				title: 'Test',
 				description: '',
 				entries: ['a', 'b'],
@@ -96,7 +102,10 @@ function contract(name: string, factory: () => Promise<Repos>, options: { skip?:
 				featured: false,
 				createdAt: new Date(),
 			})
-			expect((await repos.dictionaries.findById(id))?.entries).toEqual(['a', 'b'])
+			expect(await repos.dictionaries.findById(id)).toMatchObject({
+				entries: ['a', 'b'],
+				language: 'de',
+			})
 			expect((await repos.dictionaries.listListed(100)).some((d) => d.id === id)).toBe(false)
 		})
 
@@ -153,6 +162,8 @@ function contract(name: string, factory: () => Promise<Repos>, options: { skip?:
 					authorId: null,
 					authorName: 'X',
 					text: `m${i}`,
+					key: null,
+					params: null,
 					announcement: null,
 					createdAt: new Date(),
 				})

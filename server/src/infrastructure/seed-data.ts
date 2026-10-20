@@ -4,9 +4,13 @@
  * deploying is enough to update them. Ids are fixed so rooms keep their link.
  */
 
+import type { LanguageCode } from '@bingo/shared'
+
 export interface SeedDictionary {
 	id: string
 	code: string
+	/** Language of the expressions: dictionaries are never translated. */
+	language: LanguageCode
 	title: string
 	description: string
 	freeSpace: string | null
@@ -19,7 +23,8 @@ export const FEATURED_DICTIONARIES: SeedDictionary[] = [
 	{
 		id: '00000000-0000-4000-8000-000000000001',
 		code: 'discours-macron',
-		title: 'Discours de Macron ce soir',
+		language: 'fr',
+		title: 'Discours Macron manifs',
 		description: 'Allocution présidentielle de 20 h : cochez les expressions dès qu’elles tombent.',
 		freeSpace: 'Regard grave à la caméra',
 		funnyNames: [
@@ -78,6 +83,7 @@ export const FEATURED_DICTIONARIES: SeedDictionary[] = [
 	{
 		id: '00000000-0000-4000-8000-000000000002',
 		code: 'reunion-d-equipe',
+		language: 'fr',
 		title: 'Réunion d’équipe',
 		description: 'La visio de 9 h qui aurait pu être un mail.',
 		freeSpace: 'Café froid',
@@ -115,6 +121,7 @@ export const FEATURED_DICTIONARIES: SeedDictionary[] = [
 	{
 		id: '00000000-0000-4000-8000-000000000003',
 		code: 'repas-de-famille',
+		language: 'fr',
 		title: 'Repas de famille',
 		description: 'Le déjeuner du dimanche, entre le fromage et le débat politique.',
 		freeSpace: 'Re-servez-vous !',
@@ -151,6 +158,7 @@ export const FEATURED_DICTIONARIES: SeedDictionary[] = [
 	{
 		id: '00000000-0000-4000-8000-000000000004',
 		code: 'match-de-foot',
+		language: 'fr',
 		title: 'Match de foot à la télé',
 		description: 'Les classiques des commentateurs, du coup d’envoi au coup de sifflet final.',
 		freeSpace: 'Gros plan sur l’entraîneur',

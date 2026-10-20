@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { LIMITS, type MessageView } from '@bingo/shared'
 import { computed, nextTick, ref, watch } from 'vue'
+import { feedText } from '../i18n/feed'
+import { useI18n } from '../i18n/useI18n'
 import { formatTime } from '../lib/format'
 import AppIcon from './ui/AppIcon.vue'
 
 const props = defineProps<{ messages: MessageView[]; me: string | null; canWrite: boolean }>()
 const emit = defineEmits<{ send: [text: string] }>()
 
+const { t, tc, locale } = useI18n()
 const draft = ref('')
 const feed = ref<HTMLElement | null>(null)
 const stickToBottom = ref(true)
@@ -39,7 +42,7 @@ function submit() {
 
 <template>
 	<section class="chat" aria-labelledby="chat-title">
-		<h2 id="chat-title" class="chat__title"><AppIcon name="chat" /> Fil du salon</h2>
+		<h2 id="chat-title" class="chat__title"><AppIcon name="chat" /> {{ t('chat.title') }}</h2>
 		<ol ref="feed" class="chat__feed" role="log" aria-live="polite" aria-relevant="additions" @scroll.passive="onScroll">
 			<li
 				v-for="message in messages"
@@ -50,28 +53,31 @@ function submit() {
 				<template v-if="message.kind === 'chat'">
 					<span class="msg__meta">
 						<strong>{{ message.authorName }}</strong>
-						<time :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
+						<time :datetime="message.createdAt">{{ formatTime(message.createdAt, locale) }}</time>
 					</span>
 					<p class="msg__text">{{ message.text }}</p>
 				</template>
-				<p v-else class="msg__text">{{ message.text }}</p>
+				<p v-else class="msg__text">{{ feedText(message, t, tc) }}</p>
 			</li>
-			<li v-if="messages.length === 0" class="chat__empty">Aucun message pour l’instant. Lancez la discussion !</li>
+			<li v-if="messages.length === 0" class="chat__empty">{{ t('chat.empty') }}</li>
 		</ol>
 		<form v-if="canWrite" class="chat__form" @submit.prevent="submit">
-			<label for="chat-input" class="visually-hidden">Votre message</label>
+			<label for="chat-input" class="visually-hidden">{{ t('chat.label') }}</label>
 			<input
 				id="chat-input"
 				v-model="draft"
 				class="chat__input"
 				:maxlength="LIMITS.chatMessageMax"
-				placeholder="Réagir en direct…"
+				:placeholder="t('chat.placeholder')"
 				autocomplete="off"
 				enterkeyhint="send"
 			/>
-			<span v-if="remaining < 40" class="chat__count" aria-live="polite">{{ remaining }}</span>
+			<span v-if="remaining < 40" class="chat__count" aria-live="polite" :title="tc('chat.remaining', remaining)">
+				<span aria-hidden="true">{{ remaining }}</span>
+				<span class="visually-hidden">{{ tc('chat.remaining', remaining) }}</span>
+			</span>
 			<button type="submit" class="chat__send" :disabled="!draft.trim()">
-				<AppIcon name="send" label="Envoyer" />
+				<AppIcon name="send" :label="t('chat.send')" />
 			</button>
 		</form>
 	</section>
